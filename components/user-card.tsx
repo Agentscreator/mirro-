@@ -26,8 +26,12 @@ interface UserCardProps {
 
 export function UserCard({ user, onMessage, onViewProfile, isMessaging = false }: UserCardProps) {
   const [imageError, setImageError] = useState(false)
+  const [gifError, setGifError] = useState(false)
   const router = useRouter()
   const usernameInitial = user.username.charAt(0).toUpperCase()
+
+  // Direct MP4 URL from Gifer - using MP4 instead of GIF for better performance
+  const DEFAULT_ANIMATED_BG = "https://i.gifer.com/RtKg.mp4"
 
   // Debug logging
   console.log("UserCard received user:", user.username, "image:", user.image, "profileImage:", user.profileImage)
@@ -70,20 +74,29 @@ export function UserCard({ user, onMessage, onViewProfile, isMessaging = false }
     setImageError(true)
   }
 
+  const handleGifError = () => {
+    console.log("GIF failed to load for user:", user.username)
+    setGifError(true)
+  }
+
   // Get the actual image URL to use
   const imageUrl = getBestImageUrl(user)
 
-  // Improved fallback logic: show fallback only if:
-  // 1. No image URL exists, OR
-  // 2. Image failed to load (imageError is true)
-  const shouldShowFallback = !imageUrl || imageError
+  // Improved fallback logic:
+  // 1. Show profile/image if available and no error
+  // 2. Show animated GIF with initial overlay if primary image fails but GIF loads
+  // 3. Show static colored background with initial if both fail
+  const shouldShowPrimaryImage = imageUrl && !imageError
+  const shouldShowGifFallback = !shouldShowPrimaryImage && !gifError
+  const shouldShowStaticFallback = !shouldShowPrimaryImage && gifError
 
   console.log("Image display logic for", user.username, ":", {
     imageUrl,
     imageError,
-    shouldShowFallback,
-    profileImage: user.profileImage,
-    image: user.image
+    gifError,
+    shouldShowPrimaryImage,
+    shouldShowGifFallback,
+    shouldShowStaticFallback
   })
 
   return (
@@ -91,11 +104,7 @@ export function UserCard({ user, onMessage, onViewProfile, isMessaging = false }
       <CardContent className="p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:gap-4">
           <div className="relative mx-auto mb-4 h-20 w-20 flex-shrink-0 overflow-hidden rounded-full shadow-md border-2 border-blue-200 sm:mx-0 sm:mb-0 sm:h-16 sm:w-16">
-            {shouldShowFallback ? (
-              <div className="w-full h-full bg-blue-500 flex items-center justify-center text-white text-xl font-semibold">
-                {usernameInitial}
-              </div>
-            ) : (
+            {shouldShowPrimaryImage ? (
               <Image
                 src={imageUrl!}
                 alt={user.username}
@@ -106,6 +115,28 @@ export function UserCard({ user, onMessage, onViewProfile, isMessaging = false }
                 priority={false}
                 unoptimized={imageUrl?.startsWith('http') && !imageUrl.includes('localhost')} // Handle external URLs
               />
+            ) : shouldShowGifFallback ? (
+              <div className="relative w-full h-full">
+                <video
+                  src={DEFAULT_ANIMATED_BG}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="absolute inset-0 w-full h-full object-cover"
+                  onError={handleGifError}
+                />
+                {/* Initial overlay */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-white text-xl font-bold drop-shadow-lg" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>
+                    {usernameInitial}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="w-full h-full bg-blue-500 flex items-center justify-center text-white text-xl font-semibold">
+                {usernameInitial}
+              </div>
             )}
           </div>
           <div className="flex-1">
