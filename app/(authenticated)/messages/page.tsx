@@ -10,7 +10,6 @@ import {
   MoreVertical,
   Phone,
   Video,
-  Info,
   Paperclip,
   Send,
   Check,
@@ -23,6 +22,10 @@ import {
   Settings,
   MessageSquarePlus,
   ArrowLeft,
+  PhoneOff,
+  VideoOff,
+  Mic,
+  MicOff,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -44,6 +47,144 @@ import { useStreamContext } from "@/components/providers/StreamProvider"
 import type { Channel as StreamChannel } from "stream-chat"
 import "stream-chat-react/dist/css/v2/index.css"
 import { cn } from "@/lib/utils"
+
+// Add the CallModal component (same as in direct-message-page.tsx)
+const CallModal = ({
+  isOpen,
+  onClose,
+  callType,
+  otherUser,
+  isIncoming = false,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  callType: "audio" | "video"
+  otherUser: any
+  isIncoming?: boolean
+}) => {
+  const [isCallActive, setIsCallActive] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
+  const [isVideoEnabled, setIsVideoEnabled] = useState(callType === "video")
+  const [callDuration, setCallDuration] = useState(0)
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout
+    if (isCallActive) {
+      interval = setInterval(() => {
+        setCallDuration((prev) => prev + 1)
+      }, 1000)
+    }
+    return () => clearInterval(interval)
+  }, [isCallActive])
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+  }
+
+  const handleAnswer = () => {
+    setIsCallActive(true)
+  }
+
+  const handleDecline = () => {
+    onClose()
+  }
+
+  const handleEndCall = () => {
+    setIsCallActive(false)
+    onClose()
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center">
+      <div className="bg-white rounded-3xl p-8 max-w-md w-full mx-4 text-center">
+        {/* User Avatar */}
+        <Avatar className="h-32 w-32 mx-auto mb-6 ring-4 ring-white shadow-xl">
+          <AvatarImage src={otherUser?.image || "/placeholder.svg"} />
+          <AvatarFallback className="bg-gradient-to-br from-sky-400 to-sky-500 text-white text-4xl font-semibold">
+            {otherUser?.name?.[0]?.toUpperCase() || "?"}
+          </AvatarFallback>
+        </Avatar>
+
+        {/* User Name */}
+        <h3 className="text-2xl font-semibold text-gray-900 mb-2">{otherUser?.name || "Unknown User"}</h3>
+
+        {/* Call Status */}
+        <p className="text-gray-600 mb-8">
+          {isIncoming && !isCallActive && `Incoming ${callType} call...`}
+          {!isIncoming && !isCallActive && `Calling...`}
+          {isCallActive && formatDuration(callDuration)}
+        </p>
+
+        {/* Video Area (for video calls) */}
+        {callType === "video" && isCallActive && (
+          <div className="bg-gray-900 rounded-2xl h-48 mb-6 flex items-center justify-center">
+            <p className="text-white">Video call area</p>
+          </div>
+        )}
+
+        {/* Call Controls */}
+        <div className="flex justify-center gap-4">
+          {isIncoming && !isCallActive && (
+            <>
+              <Button
+                onClick={handleDecline}
+                className="bg-red-500 hover:bg-red-600 text-white rounded-full p-4 h-16 w-16"
+              >
+                <PhoneOff className="h-6 w-6" />
+              </Button>
+              <Button
+                onClick={handleAnswer}
+                className="bg-green-500 hover:bg-green-600 text-white rounded-full p-4 h-16 w-16"
+              >
+                <Phone className="h-6 w-6" />
+              </Button>
+            </>
+          )}
+
+          {isCallActive && (
+            <>
+              <Button
+                onClick={() => setIsMuted(!isMuted)}
+                className={`${isMuted ? "bg-red-500 hover:bg-red-600" : "bg-gray-500 hover:bg-gray-600"} text-white rounded-full p-3 h-12 w-12`}
+              >
+                {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+              </Button>
+
+              {callType === "video" && (
+                <Button
+                  onClick={() => setIsVideoEnabled(!isVideoEnabled)}
+                  className={`${!isVideoEnabled ? "bg-red-500 hover:bg-red-600" : "bg-gray-500 hover:bg-gray-600"} text-white rounded-full p-3 h-12 w-12`}
+                >
+                  {isVideoEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
+                </Button>
+              )}
+
+              <Button
+                onClick={handleEndCall}
+                className="bg-red-500 hover:bg-red-600 text-white rounded-full p-3 h-12 w-12"
+              >
+                <PhoneOff className="h-5 w-5" />
+              </Button>
+            </>
+          )}
+
+          {!isIncoming && !isCallActive && (
+            <Button
+              onClick={handleEndCall}
+              className="bg-red-500 hover:bg-red-600 text-white rounded-full p-4 h-16 w-16"
+            >
+              <PhoneOff className="h-6 w-6" />
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // Custom Channel Preview Component
 const CustomChannelPreview = ({ channel, setActiveChannel, watchers }: ChannelPreviewUIComponentProps) => {
@@ -137,102 +278,261 @@ const CustomChannelHeader = ({ onBack }: { onBack?: () => void }) => {
 
   const otherMember = Object.values(channel.state.members || {}).find((member) => member.user?.id !== currentUser?.id)
 
-  return (
-    <div className="flex items-center justify-between p-4 md:p-6 bg-white/95 backdrop-blur-xl border-b border-sky-100/50 shadow-sm">
-      <div className="flex items-center gap-3 md:gap-4">
-        {/* Mobile back button */}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="md:hidden p-2 hover:bg-sky-50 text-sky-600 rounded-full transition-all duration-200"
-          onClick={onBack}
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
+  const [callModal, setCallModal] = useState<{
+    isOpen: boolean
+    callType: "audio" | "video"
+    isIncoming: boolean
+  }>({
+    isOpen: false,
+    callType: "audio",
+    isIncoming: false,
+  })
 
-        <Avatar className="h-10 w-10 md:h-12 md:w-12 ring-2 ring-sky-100 ring-offset-2">
-          <AvatarImage src={otherMember?.user?.image || "/placeholder.svg"} />
-          <AvatarFallback className="bg-gradient-to-br from-sky-400 to-sky-500 text-white font-semibold">
-            {otherMember?.user?.name?.[0]?.toUpperCase() || "?"}
-          </AvatarFallback>
-        </Avatar>
-        <div>
-          <h2 className="font-semibold text-sky-900 text-base md:text-lg">{otherMember?.user?.name || "Unknown"}</h2>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-            <p className="text-xs md:text-sm text-emerald-500 font-medium">Online</p>
+  const initiateCall = async (callType: "audio" | "video") => {
+    if (!channel || !client) return
+
+    try {
+      // Send call initiation event through Stream Chat
+      await channel.sendEvent({
+        type: "message.new", // Use a supported event type
+        call_initiated: true,
+        call_type: callType,
+        target_user: otherMember?.user?.id,
+      } as any)
+
+      // Open call modal
+      setCallModal({
+        isOpen: true,
+        callType,
+        isIncoming: false,
+      })
+    } catch (error) {
+      console.error("Error initiating call:", error)
+      alert("Failed to start call. Please try again.")
+    }
+  }
+
+  // Listen for incoming calls
+  useEffect(() => {
+    if (!channel) return
+
+    const handleCallEvent = (event: any) => {
+      // Use type guards to check if this is a call initiation event
+      if (event.call_initiated && event.user?.id !== client?.user?.id) {
+        setCallModal({
+          isOpen: true,
+          callType: event.call_type || "audio",
+          isIncoming: true,
+        })
+      }
+    }
+
+    // Listen for message events that might contain call data
+    channel.on("message.new" as any, handleCallEvent)
+
+    return () => {
+      channel.off("message.new" as any, handleCallEvent)
+    }
+  }, [channel, client])
+
+  return (
+    <>
+      <div className="flex items-center justify-between p-4 md:p-6 bg-white/95 backdrop-blur-xl border-b border-sky-100/50 shadow-sm">
+        <div className="flex items-center gap-3 md:gap-4">
+          {/* Mobile back button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="md:hidden p-2 hover:bg-sky-50 text-sky-600 rounded-full transition-all duration-200"
+            onClick={onBack}
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+
+          <Avatar className="h-10 w-10 md:h-12 md:w-12 ring-2 ring-sky-100 ring-offset-2">
+            <AvatarImage src={otherMember?.user?.image || "/placeholder.svg"} />
+            <AvatarFallback className="bg-gradient-to-br from-sky-400 to-sky-500 text-white font-semibold">
+              {otherMember?.user?.name?.[0]?.toUpperCase() || "?"}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <h2 className="font-semibold text-sky-900 text-base md:text-lg">{otherMember?.user?.name || "Unknown"}</h2>
+            <div className="flex items-center gap-2">
+              {otherMember?.user?.online ? (
+                <>
+                  <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                  <p className="text-xs md:text-sm text-emerald-500 font-medium">Online</p>
+                </>
+              ) : (
+                <>
+                  <div className="w-2 h-2 bg-gray-300 rounded-full"></div>
+                  <p className="text-xs md:text-sm text-gray-500 font-medium">Offline</p>
+                </>
+              )}
+            </div>
           </div>
+        </div>
+
+        <div className="flex items-center gap-1 md:gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="p-2 md:p-3 hover:bg-sky-50 text-sky-600 rounded-full transition-all duration-200"
+            onClick={() => initiateCall("audio")}
+          >
+            <Phone className="h-4 w-4 md:h-5 md:w-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="p-2 md:p-3 hover:bg-sky-50 text-sky-600 rounded-full transition-all duration-200"
+            onClick={() => initiateCall("video")}
+          >
+            <Video className="h-4 w-4 md:h-5 md:w-5" />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="p-2 md:p-3 hover:bg-sky-50 text-sky-600 rounded-full transition-all duration-200"
+              >
+                <MoreVertical className="h-4 w-4 md:h-5 md:w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-white/95 backdrop-blur-xl border-sky-100/50 shadow-xl">
+              <DropdownMenuItem
+                className="text-sky-700 hover:bg-sky-50"
+                onClick={() => {
+                  if (channel) {
+                    const isMuted = channel.muteStatus().muted
+                    if (isMuted) {
+                      channel.unmute()
+                      alert("Notifications unmuted")
+                    } else {
+                      channel.mute()
+                      alert("Notifications muted")
+                    }
+                  }
+                }}
+              >
+                <Volume2 className="h-4 w-4 mr-3" />
+                Mute Notifications
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-sky-700 hover:bg-sky-50"
+                onClick={async () => {
+                  if (channel) {
+                    // Store pinned status in custom data
+                    await channel.update({
+                      pinned: true,
+                      pinned_at: new Date().toISOString(),
+                      pinned_by: client.user?.id,
+                    } as any)
+                    alert("Chat pinned")
+                  }
+                }}
+              >
+                <Pin className="h-4 w-4 mr-3" />
+                Pin Chat
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-sky-700 hover:bg-sky-50"
+                onClick={async () => {
+                  if (channel) {
+                    // Store archived status in custom data
+                    await channel.update({
+                      archived: true,
+                      archived_at: new Date().toISOString(),
+                    } as any)
+                    alert("Chat archived")
+                  }
+                }}
+              >
+                <Archive className="h-4 w-4 mr-3" />
+                Archive Chat
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-red-500 hover:bg-red-50"
+                onClick={() => {
+                  if (channel && confirm("Are you sure you want to delete this chat?")) {
+                    channel.delete().then(() => {
+                      alert("Chat deleted")
+                    })
+                  }
+                }}
+              >
+                <Trash2 className="h-4 w-4 mr-3" />
+                Delete Chat
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
-      <div className="flex items-center gap-1 md:gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="p-2 md:p-3 hover:bg-sky-50 text-sky-600 rounded-full transition-all duration-200"
-        >
-          <Phone className="h-4 w-4 md:h-5 md:w-5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="p-2 md:p-3 hover:bg-sky-50 text-sky-600 rounded-full transition-all duration-200"
-        >
-          <Video className="h-4 w-4 md:h-5 md:w-5" />
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="p-2 md:p-3 hover:bg-sky-50 text-sky-600 rounded-full transition-all duration-200"
-            >
-              <MoreVertical className="h-4 w-4 md:h-5 md:w-5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-white/95 backdrop-blur-xl border-sky-100/50 shadow-xl">
-            <DropdownMenuItem className="text-sky-700 hover:bg-sky-50">
-              <Info className="h-4 w-4 mr-3" />
-              Contact Info
-            </DropdownMenuItem>
-            <DropdownMenuItem className="text-sky-700 hover:bg-sky-50">
-              <Volume2 className="h-4 w-4 mr-3" />
-              Mute Notifications
-            </DropdownMenuItem>
-            <DropdownMenuItem className="text-sky-700 hover:bg-sky-50">
-              <Pin className="h-4 w-4 mr-3" />
-              Pin Chat
-            </DropdownMenuItem>
-            <DropdownMenuItem className="text-sky-700 hover:bg-sky-50">
-              <Archive className="h-4 w-4 mr-3" />
-              Archive Chat
-            </DropdownMenuItem>
-            <DropdownMenuItem className="text-red-500 hover:bg-red-50">
-              <Trash2 className="h-4 w-4 mr-3" />
-              Delete Chat
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </div>
+      {/* Call Modal */}
+      <CallModal
+        isOpen={callModal.isOpen}
+        onClose={() => setCallModal((prev) => ({ ...prev, isOpen: false }))}
+        callType={callModal.callType}
+        otherUser={otherMember?.user}
+        isIncoming={callModal.isIncoming}
+      />
+    </>
   )
 }
 
 // Custom Message Input Component
 const CustomMessageInput = () => {
   const [text, setText] = useState("")
+  const [attachments, setAttachments] = useState<File[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const { channel } = useChannelStateContext()
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const newFiles = Array.from(e.target.files)
+      setAttachments((prev) => [...prev, ...newFiles])
+    }
+  }
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!text.trim() || !channel) return
+    if ((!text.trim() && attachments.length === 0) || !channel) return
 
     try {
-      await channel.sendMessage({
+      const messageData: any = {
         text: text.trim(),
-      })
+      }
+
+      if (attachments.length > 0) {
+        const streamAttachments = await Promise.all(
+          attachments.map(async (file) => {
+            const isImage = file.type.startsWith("image/")
+
+            return {
+              type: file.type,
+              title: file.name,
+              file_size: file.size,
+              mime_type: file.type,
+              asset_url: URL.createObjectURL(file),
+              image_url: isImage ? URL.createObjectURL(file) : undefined,
+            }
+          }),
+        )
+
+        messageData.attachments = streamAttachments
+      }
+
+      await channel.sendMessage(messageData)
+
       setText("")
+      setAttachments([])
     } catch (error) {
       console.error("Error sending message:", error)
     }
@@ -260,15 +560,18 @@ const CustomMessageInput = () => {
   return (
     <div className="p-4 md:p-6 bg-white/95 backdrop-blur-xl border-t border-sky-100/50 pb-[env(safe-area-inset-bottom)] fixed md:relative bottom-0 left-0 right-0 z-[60] md:z-10">
       <form onSubmit={handleSubmit} className="flex items-end gap-2 md:gap-4 min-h-[60px]">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="p-2 md:p-3 mb-1 hover:bg-sky-50 text-sky-600 rounded-full transition-all duration-200 flex-shrink-0"
-        >
-          <Paperclip className="h-4 w-4 md:h-5 md:w-5" />
-          <span className="sr-only md:not-sr-only md:ml-1 text-xs">Media</span>
-        </Button>
+        <div>
+          <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" multiple />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="p-2 md:p-3 mb-1 hover:bg-sky-50 text-sky-600 rounded-full transition-all duration-200 flex-shrink-0"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Paperclip className="h-4 w-4 md:h-5 md:w-5" />
+          </Button>
+        </div>
 
         <div className="flex-1 relative">
           <textarea
@@ -280,11 +583,40 @@ const CustomMessageInput = () => {
             className="w-full resize-none border-0 rounded-2xl md:rounded-3xl px-4 md:px-6 py-3 md:py-4 text-sm bg-sky-50/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:bg-white/80 max-h-[120px] placeholder:text-sky-400 transition-all duration-300"
             rows={1}
           />
+
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {attachments.map((file, index) => (
+                <div key={index} className="relative bg-white rounded-lg p-1 border border-sky-100 shadow-sm">
+                  <div className="flex items-center gap-2 max-w-[150px]">
+                    {file.type.startsWith("image/") ? (
+                      <img
+                        src={URL.createObjectURL(file) || "/placeholder.svg"}
+                        alt={file.name}
+                        className="h-10 w-10 object-cover rounded"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 bg-sky-100 rounded flex items-center justify-center">
+                        <Paperclip className="h-4 w-4 text-sky-500" />
+                      </div>
+                    )}
+                    <span className="text-xs truncate">{file.name}</span>
+                  </div>
+                  <button
+                    className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center"
+                    onClick={() => removeAttachment(index)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <Button
           type="submit"
-          disabled={!text.trim()}
+          disabled={!text.trim() && attachments.length === 0}
           className="bg-sky-500 hover:bg-sky-600 text-white p-3 md:p-4 rounded-full mb-1 disabled:opacity-30 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 flex-shrink-0"
         >
           <Send className="h-4 w-4 md:h-5 md:w-5" />
@@ -401,32 +733,68 @@ export default function MessagesPage() {
 
     setIsSearching(true)
     try {
-      // Search for messages containing the query
-      const messageResponse = await client.search(
-        { members: { $in: [client.userID || ""] } },
-        { text: { $autocomplete: searchQuery } },
-        { limit: 10 },
-      )
+// Search for channels/conversations
+const channelResponse = await client.queryChannels(
+  {
+    type: "messaging",
+    members: { $in: [client.userID || ""] },
+    // Fix: Use the correct property path for member names
+    $or: [
+      { name: { $autocomplete: searchQuery } },
+      { "member.user.name": { $autocomplete: searchQuery } }
+    ],
+  },
+  { last_message_at: -1 },
+  { limit: 10 },
+)
 
-      // Search for users matching the query
-      const userResponse = await client.queryUsers(
-        {
-          $or: [{ name: { $autocomplete: searchQuery } }, { username: { $autocomplete: searchQuery } }],
-        },
-        { id: 1 },
-        { limit: 10 },
-      )
+// Search for users matching the query
+const userResponse = await client.queryUsers(
+  {
+    $and: [
+      // Fix: Remove $ne operator and use a different approach
+      {
+        $or: [
+          { name: { $autocomplete: searchQuery } },
+          { username: { $autocomplete: searchQuery } }
+        ],
+      },
+    ],
+  },
+  { id: 1 },
+  { limit: 10 },
+)
+
+// Alternative approach: Filter out current user from results
+const filteredUsers = userResponse.users.filter(user => user.id !== client.userID)
+
+      // Search for messages containing the query
+      let messageResults: any[] = []
+      try {
+        const messageResponse = await client.search(
+          { members: { $in: [client.userID || ""] } },
+          { text: { $autocomplete: searchQuery } },
+          { limit: 10 },
+        )
+        messageResults = messageResponse.results
+      } catch (error) {
+        console.log("Message search not available:", error)
+      }
 
       // Combine results with proper structure
       const results = [
-        ...messageResponse.results.map((r) => ({
+        ...channelResponse.map((channel) => ({
+          type: "channel",
+          data: channel,
+        })),
+        ...userResponse.users.map((u) => ({ type: "user", data: u })),
+        ...messageResults.map((r) => ({
           type: "message",
           data: {
             ...r.message,
             cid: r.message.cid || `${r.message.channel?.type}:${r.message.channel?.id}`,
           },
         })),
-        ...userResponse.users.filter((u) => u.id !== client.userID).map((u) => ({ type: "user", data: u })),
       ]
 
       setSearchResults(results)

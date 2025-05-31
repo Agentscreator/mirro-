@@ -6696,10 +6696,10 @@ stream-chat-react@^13.0.4:
     "@stream-io/transliterate" "^1.5.5"
     mml-react "^0.4.7"
 
-stream-chat@^9.1.1:
-  version "9.1.1"
-  resolved "https://registry.npmmirror.com/stream-chat/-/stream-chat-9.1.1.tgz#c81ffa84a7ca579d9812065bc159010191b59090"
-  integrity sha512-7Y23aIVQMppNZgRj/rTFwIx9pszxgDcS99idkSXJSgdV8C7FlyDtiF1yQSdP0oiNFAt7OUP/xSqmbJTljrm24Q==
+stream-chat@^9.3.0:
+  version "9.3.0"
+  resolved "https://registry.npmmirror.com/stream-chat/-/stream-chat-9.3.0.tgz#35ca4db9e841eb92d07413ae156de0500ad77b23"
+  integrity sha512-S73B3HrvmQvJjq58Zjo50vh74juhsWsVRpT+OBjGAxSGxlA+ITkZ3vKs8Y/r2eDK7mBTMmX5QCruFaDJH5dRuw==
   dependencies:
     "@types/jsonwebtoken" "^9.0.8"
     "@types/ws" "^8.5.14"

@@ -8,7 +8,6 @@ import {
   Phone,
   Video,
   MoreVertical,
-  Info,
   Volume2,
   Pin,
   Archive,
@@ -196,16 +195,12 @@ const DMChannelHeader = ({
   onBack,
   channel,
   client,
-  showContactInfo,
-  setShowContactInfo,
   router,
 }: {
   otherUser: any
   onBack: () => void
   channel: StreamChannel | null
   client: any
-  showContactInfo: boolean
-  setShowContactInfo: (value: boolean | ((prev: boolean) => boolean)) => void
   router: any
 }) => {
   const [callModal, setCallModal] = useState<{
@@ -342,13 +337,6 @@ const DMChannelHeader = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="bg-white/95 backdrop-blur-xl border-sky-100/50 shadow-xl">
-              <DropdownMenuItem
-                className="text-sky-700 hover:bg-sky-50"
-                onClick={() => setShowContactInfo((prev: boolean) => !prev)}
-              >
-                <Info className="h-4 w-4 mr-3" />
-                {showContactInfo ? "Hide Contact Info" : "Show Contact Info"}
-              </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-sky-700 hover:bg-sky-50"
                 onClick={() => {
@@ -612,7 +600,6 @@ export default function DirectMessagePage() {
   const [otherUser, setOtherUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [showContactInfo, setShowContactInfo] = useState(false)
   const router = useRouter()
   const params = useParams()
   const userId = params.userId as string
@@ -748,8 +735,6 @@ export default function DirectMessagePage() {
                 onBack={handleBack}
                 channel={channel}
                 client={client}
-                showContactInfo={showContactInfo}
-                setShowContactInfo={setShowContactInfo}
                 router={router}
               />
               <div className="flex-1 min-h-0 overflow-hidden">
@@ -763,38 +748,6 @@ export default function DirectMessagePage() {
           </Channel>
         </div>
       </Chat>
-
-      {showContactInfo && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={() => setShowContactInfo(false)}
-        >
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-xl font-semibold text-sky-900 mb-4">Contact Information</h3>
-            <div className="flex items-center gap-4 mb-6">
-              <Avatar className="h-16 w-16 ring-2 ring-sky-100 ring-offset-2">
-                <AvatarImage src={otherUser?.image || "/placeholder.svg"} />
-                <AvatarFallback className="bg-gradient-to-br from-sky-400 to-sky-500 text-white font-semibold text-lg">
-                  {otherUser?.name?.[0]?.toUpperCase() || "?"}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <h4 className="font-semibold text-sky-900">{otherUser?.name || "Unknown User"}</h4>
-                <p className="text-sm text-sky-600">@{otherUser?.username || otherUser?.id?.slice(-8)}</p>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <p className="text-sm text-gray-500">For privacy reasons, detailed contact information is hidden.</p>
-              <Button
-                className="w-full bg-sky-500 hover:bg-sky-600 text-white"
-                onClick={() => setShowContactInfo(false)}
-              >
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Custom Styles */}
       <style

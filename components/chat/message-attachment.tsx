@@ -10,6 +10,7 @@ interface MessageAttachmentProps {
 
 export function MessageAttachment({ attachment }: MessageAttachmentProps) {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
+  const [imageError, setImageError] = useState(false)
 
   // Determine attachment type
   const isImage = attachment.type?.startsWith("image/") || attachment.image_url
@@ -50,18 +51,25 @@ export function MessageAttachment({ attachment }: MessageAttachmentProps) {
     document.body.removeChild(a)
   }
 
+  // Get image URL with fallback
+  const getImageUrl = () => {
+    return attachment.image_url || attachment.asset_url
+  }
+
   return (
     <div className="mt-2 max-w-xs">
-      {/* File preview for images */}
-      {isImage && (
+      {/* Image preview */}
+      {isImage && !imageError && (
         <div className="relative group">
           <img
-            src={attachment.image_url || attachment.asset_url}
+            src={getImageUrl() || "/placeholder.svg"}
             alt={attachment.title || "Image attachment"}
-            className="max-h-48 rounded-lg object-cover cursor-pointer border border-sky-100"
+            className="max-h-48 w-full rounded-lg object-cover cursor-pointer border border-sky-100"
             onClick={() => setIsPreviewOpen(true)}
+            onError={() => setImageError(true)}
+            loading="lazy"
           />
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100 rounded-lg">
             <Button
               size="sm"
               variant="secondary"
@@ -74,8 +82,38 @@ export function MessageAttachment({ attachment }: MessageAttachmentProps) {
         </div>
       )}
 
-      {/* File preview for non-images */}
-      {!isImage && (
+      {/* Video preview */}
+      {isVideo && (
+        <div className="relative group">
+          <video
+            src={attachment.asset_url}
+            className="max-h-48 w-full rounded-lg object-cover border border-sky-100"
+            controls
+            preload="metadata"
+          >
+            Your browser does not support the video tag.
+          </video>
+        </div>
+      )}
+
+      {/* Audio preview */}
+      {isAudio && (
+        <div className="bg-sky-50 border border-sky-100 rounded-lg p-3">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-2 bg-white rounded-md shadow-sm">{getFileIcon()}</div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-sky-900 truncate">{fileName}</p>
+              <p className="text-xs text-sky-600">{formatFileSize(attachment.file_size)}</p>
+            </div>
+          </div>
+          <audio src={attachment.asset_url} controls className="w-full" preload="metadata">
+            Your browser does not support the audio tag.
+          </audio>
+        </div>
+      )}
+
+      {/* File preview for non-media files or failed images */}
+      {(!isImage && !isVideo && !isAudio) || imageError ? (
         <div className="bg-sky-50 border border-sky-100 rounded-lg p-3 flex items-center gap-3">
           <div className="p-2 bg-white rounded-md shadow-sm">{getFileIcon()}</div>
           <div className="flex-1 min-w-0">
@@ -91,17 +129,17 @@ export function MessageAttachment({ attachment }: MessageAttachmentProps) {
             <Download className="h-4 w-4" />
           </Button>
         </div>
-      )}
+      ) : null}
 
       {/* Full-screen image preview */}
-      {isPreviewOpen && isImage && (
+      {isPreviewOpen && isImage && !imageError && (
         <div
           className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
           onClick={() => setIsPreviewOpen(false)}
         >
           <div className="relative max-w-4xl max-h-[90vh]">
             <img
-              src={attachment.image_url || attachment.asset_url}
+              src={getImageUrl() || "/placeholder.svg"}
               alt={attachment.title || "Image attachment"}
               className="max-h-[90vh] max-w-full object-contain"
             />
@@ -115,6 +153,17 @@ export function MessageAttachment({ attachment }: MessageAttachmentProps) {
               }}
             >
               <X className="h-4 w-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="absolute bottom-2 right-2 bg-black/50 hover:bg-black/70 text-white"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleDownload()
+              }}
+            >
+              <Download className="h-4 w-4 mr-1" /> Download
             </Button>
           </div>
         </div>
