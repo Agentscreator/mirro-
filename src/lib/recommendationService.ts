@@ -388,27 +388,36 @@ async function generateUserSummary(
 
 /**
  * Generate explanation for why two users should connect
- * Enhanced with database fallback
+ * Enhanced with multi-tier fallback logic
  */
 export async function generateConnectionExplanation(
   userA: RecommendedUser,
   currentUserId: string
 ): Promise<string> {
   try {
-    // Try AI-based explanation first if OpenAI is configured
+    // Tier 1: Try AI-based explanation with both users' embeddings if OpenAI is configured
     if (process.env.OPENAI_API_KEY) {
       return await generateAIExplanation(userA, currentUserId);
     }
   } catch (error) {
-    console.warn("AI explanation failed, falling back to database:", error);
+    console.warn("AI explanation with both users failed:", error);
   }
   
-  // Fallback to database-based explanation
+  try {
+    // Tier 2: Try narrative-only explanation using just the recommended user's embeddings
+    if (process.env.OPENAI_API_KEY) {
+      return await generateNarrativeOnlyExplanation(userA);
+    }
+  } catch (error) {
+    console.warn("Narrative-only explanation failed, falling back to database:", error);
+  }
+  
+  // Tier 3: Fallback to database-based explanation using common tags
   return await generateDatabaseExplanation(userA, currentUserId);
 }
 
 /**
- * AI-based explanation generation with updated prompt
+ * AI-based explanation generation with updated prompt (Tier 1)
  */
 async function generateAIExplanation(
   userA: RecommendedUser,
@@ -473,7 +482,54 @@ Examples:
 }
 
 /**
- * Database-based explanation generation (fallback)
+ * Narrative-only explanation generation using just the recommended user's embeddings (Tier 2)
+ */
+async function generateNarrativeOnlyExplanation(userA: RecommendedUser): Promise<string> {
+  // Get recommended user's thought embeddings
+  const userBThoughts = await getUserThoughtEmbeddings(userA.id);
+  
+  if (!userBThoughts.embeddings.length) {
+    throw new Error("No embeddings found for recommended user");
+  }
+  
+  // Take their top thoughts (most recent or a selection)
+  const topThoughts = userBThoughts.thoughtTexts.slice(0, 4);
+  
+  const userBSummary = await generateUserSummary(
+    userA.id,
+    userA.username,
+    topThoughts
+  );
+  
+  const recommendedUserNickname = userA.nickname || userA.username;
+  
+  // Call OpenAI with narrative-only prompt
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o-mini", 
+    messages: [
+      {
+        role: "system",
+        content: `You create narrative descriptions about users based on their thoughts and reflections. Write in 80-100 words total. Focus entirely on describing the person's journey, approach to life, and what makes them unique. Use their nickname and write as if describing someone the reader might want to get to know.
+
+Examples:
+"Alex documents their creative process through thoughtful reflections, capturing moments of inspiration and struggle alike. Their entries reveal someone who finds beauty in the intersection of structure and spontaneity, often writing about late-night studio sessions and morning walks that spark new ideas. They approach creativity as both discipline and discovery, sharing insights about the vulnerability required to make meaningful art. Their reflections show someone who values authenticity over perfection, often questioning conventional approaches while staying true to their artistic vision."
+
+"Belle uses Mirro to remember who she was when the world told her to forget. Her journal entries about self-discovery and resilience paint a picture of someone navigating life transitions with remarkable thoughtfulness. She writes about hiking adventures that become metaphors for personal growth, and quiet moments of reading that offer profound insights. Her reflections reveal someone who finds strength in vulnerability, often exploring themes of identity and belonging while maintaining an optimistic outlook on personal transformation."`
+      },
+      {
+        role: "user",
+        content: `Generate an 80-100 word narrative description of ${recommendedUserNickname} based on their thoughts and reflections: ${userBSummary}`
+      }
+    ],
+    max_tokens: 200,
+    temperature: 0.7,
+  });
+  
+  return response.choices[0].message.content || `${recommendedUserNickname} has a unique perspective and approach to life that might interest you.`;
+}
+
+/**
+ * Database-based explanation generation using common tags (Tier 3)
  */
 async function generateDatabaseExplanation(
   userA: RecommendedUser,
