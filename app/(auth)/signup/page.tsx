@@ -1,3 +1,5 @@
+//app/(auth)/signup/page.tsx
+
 "use client"
 
 import type React from "react"
@@ -15,6 +17,7 @@ import { TagSelector } from "@/components/tag-selector"
 import { AgeRangeSelector } from "@/components/age-range-selector"
 import { TAGS, GENDERS, GENDER_PREFERENCES, PROXIMITY_OPTIONS } from "@/lib/constants"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Eye, EyeOff } from "lucide-react"
 
 export default function SignupPage() {
   const router = useRouter()
@@ -25,6 +28,11 @@ export default function SignupPage() {
   const [usernameError, setUsernameError] = useState("")
   const [dobError, setDobError] = useState("")
   const [locationStatus, setLocationStatus] = useState("")
+  
+  // Password visibility states
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  
   const [formData, setFormData] = useState({
     username: "",
     nickname: "",
@@ -103,7 +111,14 @@ export default function SignupPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
+    
+    // Apply automatic trimming for username and email fields
+    let processedValue = value
+    if (name === "username" || name === "email") {
+      processedValue = value.trim()
+    }
+    
+    setFormData((prev) => ({ ...prev, [name]: processedValue }))
 
     // Clear errors when typing
     if (name === "email") {
@@ -195,6 +210,15 @@ export default function SignupPage() {
         return
       }
 
+      // Check username uniqueness
+      if (formData.username) {
+        const isUsernameAvailable = await checkUsernameUnique(formData.username)
+        if (!isUsernameAvailable) {
+          setUsernameError("This username is already taken")
+          return
+        }
+      }
+
       if (formData.password !== formData.confirmPassword) {
         setError("Passwords do not match")
         return
@@ -258,12 +282,12 @@ export default function SignupPage() {
     setError("")
 
     try {
-      // Prepare data to match API schema
+      // Prepare data to match API schema - ensure username and email are trimmed
       const registrationData = {
-        username: formData.username,
-        email: formData.email,
+        username: formData.username.trim(),
+        email: formData.email.trim(),
         password: formData.password,
-        nickname: formData.nickname || formData.username,
+        nickname: formData.nickname || formData.username.trim(),
         dob: formatDOBForAPI(formData.dob),
         gender: formData.gender,
         genderPreference: formData.genderPreference,
@@ -304,7 +328,7 @@ export default function SignupPage() {
 
       // Auto-login after successful registration
       const result = await signIn("credentials", {
-        email: formData.email,
+        email: formData.email.trim(),
         password: formData.password,
         redirect: false,
       })
@@ -409,34 +433,60 @@ export default function SignupPage() {
                     maxLength={10}
                   />
                   {dobError && <p className="text-xs text-red-500">{dobError}</p>}
-                  <p className="text-xs text-muted-foreground">Enter your date of birth (you must be 18+)</p>
+                  <p className="text-xs text-muted-foreground">Enter your date of birth (you must be 13+)</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    name="password"
-                    type="password"
-                    placeholder="Create a password (min 6 characters)"
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                    className="premium-input"
-                    minLength={6}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      name="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Create a password (min 6 characters)"
+                      value={formData.password}
+                      onChange={handleChange}
+                      required
+                      className="premium-input pr-10"
+                      minLength={6}
+                    />
+                    <button
+                      type="button"
+                      className="absolute inset-y-0 right-0 flex items-center pr-3"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="confirmPassword">Confirm Password</Label>
-                  <Input
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    type="password"
-                    placeholder="Confirm your password"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    required
-                    className="premium-input"
-                  />
+                  <div className="relative">
+                    <Input
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      type={showConfirmPassword ? "text" : "password"}
+                      placeholder="Confirm your password"
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                      required
+                      className="premium-input pr-10"
+                    />
+                    <button
+                      type="button"
+                      className="absolute inset-y-0 right-0 flex items-center pr-3"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Gender</Label>
@@ -569,6 +619,7 @@ export default function SignupPage() {
                   type="button"
                   onClick={handleNextStep}
                   className="rounded-full bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-500 dark:hover:bg-blue-600"
+                  disabled={loading}
                 >
                   Next
                 </Button>
