@@ -1,11 +1,11 @@
 // app/api/thoughts/[id]/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/src/db'
-import { thoughtsTable } from '@/src/db/schema'
-import { eq, and } from 'drizzle-orm'
-import { getEmbedding } from '@/src/lib/generateEmbeddings'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/src/lib/auth'
+import { type NextRequest, NextResponse } from "next/server"
+import { db } from "@/src/db"
+import { thoughtsTable } from "@/src/db/schema"
+import { eq, and } from "drizzle-orm"
+import { getEmbedding } from "@/src/lib/generateEmbeddings"
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/src/lib/auth"
 
 export async function PUT(
   request: NextRequest,
@@ -15,28 +15,29 @@ export async function PUT(
     // Get the current user session
     const session = await getServerSession(authOptions)
     if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const thoughtId = parseInt(params.id)
+    const thoughtId = Number.parseInt(params.id)
     if (isNaN(thoughtId)) {
-      return NextResponse.json({ error: 'Invalid thought ID' }, { status: 400 })
+      return NextResponse.json({ error: "Invalid thought ID" }, { status: 400 })
     }
 
     const { title, content } = await request.json()
 
-    if (!content || !title) {
-      return NextResponse.json({ error: 'Title and content are required' }, { status: 400 })
+    if (!content) {
+      return NextResponse.json({ error: "Content is required" }, { status: 400 })
     }
 
     // Generate new embedding for the updated content
     const embedding = await getEmbedding(content)
     const embeddingStr = JSON.stringify(embedding)
 
-    // Update the thought (only if it belongs to the current user)
+    // Update the thought with title (only if it belongs to the current user)
     const [updatedThought] = await db
       .update(thoughtsTable)
       .set({
+        title, // Update the title (can be null)
         content,
         embedding: embeddingStr,
       })
@@ -46,26 +47,27 @@ export async function PUT(
       ))
       .returning({
         id: thoughtsTable.id,
+        title: thoughtsTable.title, // Return the updated title
         content: thoughtsTable.content,
         createdAt: thoughtsTable.createdAt,
       })
 
     if (!updatedThought) {
-      return NextResponse.json({ error: 'Thought not found or unauthorized' }, { status: 404 })
+      return NextResponse.json({ error: "Thought not found or unauthorized" }, { status: 404 })
     }
 
     // Format the response to match the expected format
     const formattedThought = {
       id: updatedThought.id,
-      title,
+      title: updatedThought.title, // Use the saved title (can be null)
       content: updatedThought.content,
       createdAt: updatedThought.createdAt?.toISOString() || new Date().toISOString(),
     }
 
     return NextResponse.json(formattedThought)
   } catch (error) {
-    console.error('Error updating thought:', error)
-    return NextResponse.json({ error: 'Failed to update thought' }, { status: 500 })
+    console.error("Error updating thought:", error)
+    return NextResponse.json({ error: "Failed to update thought" }, { status: 500 })
   }
 }
 
@@ -77,12 +79,12 @@ export async function DELETE(
     // Get the current user session
     const session = await getServerSession(authOptions)
     if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const thoughtId = parseInt(params.id)
+    const thoughtId = Number.parseInt(params.id)
     if (isNaN(thoughtId)) {
-      return NextResponse.json({ error: 'Invalid thought ID' }, { status: 400 })
+      return NextResponse.json({ error: "Invalid thought ID" }, { status: 400 })
     }
 
     // Delete the thought (only if it belongs to the current user)
@@ -95,12 +97,12 @@ export async function DELETE(
       .returning({ id: thoughtsTable.id })
 
     if (!deletedThought) {
-      return NextResponse.json({ error: 'Thought not found or unauthorized' }, { status: 404 })
+      return NextResponse.json({ error: "Thought not found or unauthorized" }, { status: 404 })
     }
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error deleting thought:', error)
-    return NextResponse.json({ error: 'Failed to delete thought' }, { status: 500 })
+    console.error("Error deleting thought:", error)
+    return NextResponse.json({ error: "Failed to delete thought" }, { status: 500 })
   }
 }

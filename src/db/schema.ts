@@ -46,7 +46,6 @@ export const usersTable = pgTable("users", {
   image:            varchar("image", { length: 500 }), 
 });
 
-
 // Tags
 export const tagsTable = pgTable("tags", {
   id:       integer().primaryKey().generatedAlwaysAsIdentity(),
@@ -61,10 +60,11 @@ export const userTagsTable = pgTable("user_tags", {
   tagId:  integer("tag_id").notNull().references(() => tagsTable.id),
 });
 
-// Thoughts
+// Thoughts (with added title field)
 export const thoughtsTable = pgTable("thoughts", {
   id:        integer().primaryKey().generatedAlwaysAsIdentity(),
   userId:    uuid("userId").notNull().references(() => usersTable.id),
+  title:     varchar("title", { length: 200 }), // Added from original - nullable
   content:   text().notNull(),
   embedding: text().notNull(),
   createdAt: timestamp().defaultNow().notNull(),
