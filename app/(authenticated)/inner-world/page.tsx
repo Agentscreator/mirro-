@@ -188,7 +188,7 @@ export default function TheMirrorPage() {
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Lock className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
-          <h1 className="text-2xl sm:text-3xl font-bold text-blue-600">Thoughts (Private)</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-blue-600">Thoughts</h1>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>

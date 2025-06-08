@@ -19,7 +19,7 @@ export function Navigation() {
     {
       href: "/inner-world",
       icon: Lock,
-      label: "Thoughts (Private)",
+      label: "Thoughts",
       active: pathname === "/inner-world",
     },
     {
