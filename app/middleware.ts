@@ -8,6 +8,7 @@ export async function middleware(request: NextRequest) {
   
   // Check if the path should be protected
   const isProtectedRoute = 
+    pathname.startsWith("/feed") || 
     pathname.startsWith("/discover") || 
     pathname.startsWith("/profile") || 
     pathname.startsWith("/messages")
@@ -30,8 +31,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
   
-  // If has token and trying to access auth route, redirect to discover
+  // If has token and trying to access auth route, redirect to feed
   if (token && isAuthRoute) {
+    return NextResponse.redirect(new URL("/feed", request.url))
+  }
+  
+  // If has token and at root path, redirect to feed
+  if (token && pathname === "/") {
     return NextResponse.redirect(new URL("/feed", request.url))
   }
   
@@ -41,7 +47,10 @@ export async function middleware(request: NextRequest) {
 // Configure which paths the middleware runs on
 export const config = {
   matcher: [
+    // Root path
+    "/",
     // Protected routes
+    "/feed/:path*",
     "/discover/:path*", 
     "/profile/:path*", 
     "/messages/:path*",
