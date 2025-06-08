@@ -12,7 +12,7 @@ async function uploadToStorage(options: {
   mimetype: string
   folder?: string
 }): Promise<string> {
-  const { buffer, filename, mimetype, folder = "post-images" } = options
+  const { buffer, filename, mimetype, folder = "post-media" } = options
 
   const timestamp = Date.now()
   const fileExtension = filename.split(".").pop()
@@ -57,12 +57,67 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const userIdParam = searchParams.get("userId")
+    const feedMode = searchParams.get("feed") === "true"
+    
     console.log("URL search params:", Object.fromEntries(searchParams.entries()))
     console.log("User ID param extracted:", userIdParam)
+    console.log("Feed mode:", feedMode)
 
     let posts
-    if (userIdParam) {
-      // Clean the userId in case it has query parameters attached
+    if (feedMode) {
+      // Feed mode - get posts from all users for recommendations
+      console.log("=== FETCHING FEED POSTS ===")
+
+      // Check total posts in database
+      const totalPostsCount = await db.select({ count: count() }).from(postsTable)
+      console.log("Total posts in database:", totalPostsCount[0]?.count || 0)
+
+      const postsWithLikes = await db
+        .select({
+          id: postsTable.id,
+          userId: postsTable.userId,
+          content: postsTable.content,
+          image: postsTable.image,
+          video: postsTable.video,
+          createdAt: postsTable.createdAt,
+          updatedAt: postsTable.updatedAt,
+          user: {
+            username: usersTable.username,
+            nickname: usersTable.nickname,
+            profileImage: usersTable.profileImage,
+          },
+        })
+        .from(postsTable)
+        .leftJoin(usersTable, eq(postsTable.userId, usersTable.id))
+        .orderBy(desc(postsTable.createdAt))
+        .limit(50) // Limit for feed
+
+      console.log("Raw posts fetched for feed:", postsWithLikes.length)
+
+      posts = await Promise.all(
+        postsWithLikes.map(async (post) => {
+          const [likeCountResult, commentCountResult, userLikeResult] = await Promise.all([
+            db.select({ count: count() }).from(postLikesTable).where(eq(postLikesTable.postId, post.id)),
+            db.select({ count: count() }).from(postCommentsTable).where(eq(postCommentsTable.postId, post.id)),
+            db
+              .select()
+              .from(postLikesTable)
+              .where(and(eq(postLikesTable.postId, post.id), eq(postLikesTable.userId, session.user.id)))
+              .limit(1),
+          ])
+
+          return {
+            ...post,
+            likes: likeCountResult[0]?.count || 0,
+            comments: commentCountResult[0]?.count || 0,
+            isLiked: userLikeResult.length > 0,
+          }
+        }),
+      )
+
+      console.log(`✅ SUCCESSFULLY FETCHED ${posts.length} feed posts`)
+    } else if (userIdParam) {
+      // User-specific posts
       const cleanUserId = userIdParam.split("?")[0]
       console.log("Cleaned user ID:", cleanUserId)
 
@@ -102,6 +157,7 @@ export async function GET(request: NextRequest) {
           userId: postsTable.userId,
           content: postsTable.content,
           image: postsTable.image,
+          video: postsTable.video,
           createdAt: postsTable.createdAt,
           updatedAt: postsTable.updatedAt,
           user: {
@@ -123,6 +179,7 @@ export async function GET(request: NextRequest) {
           userId: p.userId,
           content: p.content?.substring(0, 50) + "...",
           hasImage: !!p.image,
+          hasVideo: !!p.video,
           createdAt: p.createdAt,
         })),
       )
@@ -162,19 +219,20 @@ export async function GET(request: NextRequest) {
 
       console.log(`✅ SUCCESSFULLY FETCHED ${posts.length} posts for user ${cleanUserId}`)
     } else {
-      console.log("=== FETCHING ALL POSTS (FEED) ===")
+      // All posts (legacy)
+      console.log("=== FETCHING ALL POSTS (LEGACY) ===")
 
       // Check total posts in database
       const totalPostsCount = await db.select({ count: count() }).from(postsTable)
       console.log("Total posts in database:", totalPostsCount[0]?.count || 0)
 
-      // Fetch all posts (for feed) with user info and like status
       const postsWithLikes = await db
         .select({
           id: postsTable.id,
           userId: postsTable.userId,
           content: postsTable.content,
           image: postsTable.image,
+          video: postsTable.video,
           createdAt: postsTable.createdAt,
           updatedAt: postsTable.updatedAt,
           user: {
@@ -187,9 +245,8 @@ export async function GET(request: NextRequest) {
         .leftJoin(usersTable, eq(postsTable.userId, usersTable.id))
         .orderBy(desc(postsTable.createdAt))
 
-      console.log("Raw posts fetched for feed:", postsWithLikes.length)
+      console.log("Raw posts fetched for legacy:", postsWithLikes.length)
 
-      // Get like counts, comment counts, and user's like status for each post
       posts = await Promise.all(
         postsWithLikes.map(async (post) => {
           const [likeCountResult, commentCountResult, userLikeResult] = await Promise.all([
@@ -211,7 +268,7 @@ export async function GET(request: NextRequest) {
         }),
       )
 
-      console.log(`✅ SUCCESSFULLY FETCHED ${posts.length} posts for feed`)
+      console.log(`✅ SUCCESSFULLY FETCHED ${posts.length} posts for legacy`)
     }
 
     const response = { posts }
@@ -223,6 +280,7 @@ export async function GET(request: NextRequest) {
             userId: response.posts[0].userId,
             hasContent: !!response.posts[0].content,
             hasImage: !!response.posts[0].image,
+            hasVideo: !!response.posts[0].video,
             createdAt: response.posts[0].createdAt,
           }
         : null,
@@ -260,84 +318,98 @@ export async function POST(request: NextRequest) {
     console.log("=== PARSING FORM DATA ===")
     const formData = await request.formData()
     const content = formData.get("content") as string
-    const image = formData.get("image") as File | null
+    const media = formData.get("media") as File | null
 
     console.log("Form data parsed:", {
       content: content ? `"${content.substring(0, 100)}${content.length > 100 ? "..." : ""}"` : "null",
-      hasImage: !!image,
-      imageDetails: image
+      hasMedia: !!media,
+      mediaDetails: media
         ? {
-            name: image.name,
-            size: image.size,
-            type: image.type,
+            name: media.name,
+            size: media.size,
+            type: media.type,
           }
         : null,
     })
 
-    if (!content?.trim() && !image) {
-      console.error("❌ VALIDATION ERROR: No content or image provided")
-      return NextResponse.json({ error: "Content or image is required" }, { status: 400 })
+    if (!content?.trim() && !media) {
+      console.error("❌ VALIDATION ERROR: No content or media provided")
+      return NextResponse.json({ error: "Content or media is required" }, { status: 400 })
     }
 
-    let imageUrl = null
-    if (image) {
-      console.log("=== PROCESSING IMAGE UPLOAD ===")
+    let mediaUrl = null
+    let mediaType = null
+    if (media) {
+      console.log("=== PROCESSING MEDIA UPLOAD ===")
 
-      // Validate file type
-      if (!image.type.startsWith("image/")) {
-        console.error("❌ INVALID FILE TYPE:", image.type)
-        return NextResponse.json({ error: "File must be an image" }, { status: 400 })
+      // Validate file type (images and videos)
+      if (!media.type.startsWith("image/") && !media.type.startsWith("video/")) {
+        console.error("❌ INVALID FILE TYPE:", media.type)
+        return NextResponse.json({ error: "File must be an image or video" }, { status: 400 })
       }
 
-      // Validate file size (max 10MB for posts)
-      if (image.size > 10 * 1024 * 1024) {
-        console.error("❌ FILE TOO LARGE:", image.size)
-        return NextResponse.json({ error: "File too large (max 10MB)" }, { status: 400 })
+      // Validate file size (max 50MB for videos, 10MB for images)
+      const maxSize = media.type.startsWith("video/") ? 50 * 1024 * 1024 : 10 * 1024 * 1024
+      if (media.size > maxSize) {
+        console.error("❌ FILE TOO LARGE:", media.size)
+        return NextResponse.json(
+          {
+            error: `File too large (max ${media.type.startsWith("video/") ? "50MB for videos" : "10MB for images"})`,
+          },
+          { status: 400 },
+        )
       }
 
       try {
-        console.log("Converting image to buffer...")
-        const bytes = await image.arrayBuffer()
+        console.log("Converting media to buffer...")
+        const bytes = await media.arrayBuffer()
         const buffer = Buffer.from(bytes)
         console.log("Buffer created, size:", buffer.length)
 
         console.log("Uploading to Vercel Blob...")
-        imageUrl = await uploadToStorage({
+        mediaUrl = await uploadToStorage({
           buffer,
-          filename: image.name,
-          mimetype: image.type,
-          folder: "post-images",
+          filename: media.name,
+          mimetype: media.type,
+          folder: "post-media",
         })
 
-        console.log("✅ IMAGE UPLOADED SUCCESSFULLY:", imageUrl)
+        mediaType = media.type.startsWith("video/") ? "video" : "image"
+        console.log("✅ MEDIA UPLOADED SUCCESSFULLY:", mediaUrl, "Type:", mediaType)
       } catch (uploadError) {
-        console.error("❌ IMAGE UPLOAD FAILED:", uploadError)
+        console.error("❌ MEDIA UPLOAD FAILED:", uploadError)
         console.error("Upload error stack:", uploadError instanceof Error ? uploadError.stack : "No stack trace")
-        return NextResponse.json({ error: "Failed to upload image" }, { status: 500 })
+        return NextResponse.json({ error: "Failed to upload media" }, { status: 500 })
       }
     }
 
     console.log("=== INSERTING POST INTO DATABASE ===")
-    console.log("Post data to insert:", {
+    const postData: any = {
       userId: session.user.id,
       content: content || "",
-      image: imageUrl,
+    }
+
+    if (mediaType === "image") {
+      postData.image = mediaUrl
+    } else if (mediaType === "video") {
+      postData.video = mediaUrl
+    }
+
+    console.log("Post data to insert:", {
+      userId: postData.userId,
+      content: postData.content,
+      image: postData.image,
+      video: postData.video,
     })
 
-    const post = await db
-      .insert(postsTable)
-      .values({
-        userId: session.user.id,
-        content: content || "",
-        image: imageUrl,
-      })
-      .returning()
+    const post = await db.insert(postsTable).values(postData).returning()
 
     console.log("✅ POST INSERTED SUCCESSFULLY:", {
       id: post[0].id,
       userId: post[0].userId,
       content: post[0].content?.substring(0, 50) + "...",
       hasImage: !!post[0].image,
+      hasVideo: !!post[0].video,
       createdAt: post[0].createdAt,
     })
 
@@ -377,6 +449,7 @@ export async function POST(request: NextRequest) {
       userId: newPost.userId,
       hasContent: !!newPost.content,
       hasImage: !!newPost.image,
+      hasVideo: !!newPost.video,
       likes: newPost.likes,
       comments: newPost.comments,
     })

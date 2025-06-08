@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Progress } from "@/components/ui/progress"
 import {
   Edit,
   Send,
@@ -20,19 +23,33 @@ import {
   Camera,
   Check,
   Eye,
-  MoreHorizontal,
   Paperclip,
+  Plus,
+  Trash2,
+  Grid3X3,
+  List,
 } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { cn } from "@/lib/utils"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { toast } from "@/hooks/use-toast"
+
+const MAX_TOTAL_CHARS = 8000
+const MAX_THOUGHT_CHARS = 1000
 
 interface Post {
   id: number
   content: string
   createdAt: string
   image: string | null
+  video: string | null
   likes: number
   comments: number
   isLiked?: boolean
@@ -59,6 +76,18 @@ interface FollowUser {
   image?: string
 }
 
+interface Thought {
+  id: number
+  title: string
+  content: string
+  createdAt: string
+  userId: string
+  user?: {
+    username: string
+    nickname?: string
+  }
+}
+
 export default function ProfilePage() {
   const params = useParams()
   const { data: session } = useSession()
@@ -68,10 +97,12 @@ export default function ProfilePage() {
 
   const [user, setUser] = useState<ProfileUser | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
+  const [thoughts, setThoughts] = useState<Thought[]>([])
   const [followers, setFollowers] = useState<FollowUser[]>([])
   const [following, setFollowing] = useState<FollowUser[]>([])
   const [loading, setLoading] = useState(true)
   const [postsLoading, setPostsLoading] = useState(false)
+  const [thoughtsLoading, setThoughtsLoading] = useState(false)
   const [profileImageUploading, setProfileImageUploading] = useState(false)
   const [newPost, setNewPost] = useState("")
   const [isEditingAbout, setIsEditingAbout] = useState(false)
@@ -81,12 +112,32 @@ export default function ProfilePage() {
   const [isFollowersDialogOpen, setIsFollowersDialogOpen] = useState(false)
   const [isFollowingDialogOpen, setIsFollowingDialogOpen] = useState(false)
   const [isFollowing, setIsFollowing] = useState(false)
+  const [postsViewMode, setPostsViewMode] = useState<"grid" | "list">("grid")
 
+  // Post editing states
+  const [editingPostId, setEditingPostId] = useState<number | null>(null)
+  const [editingPostContent, setEditingPostContent] = useState("")
+  const [editingPostMedia, setEditingPostMedia] = useState<string | null>(null)
+  const [editingPostMediaType, setEditingPostMediaType] = useState<"image" | "video" | null>(null)
+  const [newEditMedia, setNewEditMedia] = useState<File | null>(null)
+  const [removeEditMedia, setRemoveEditMedia] = useState(false)
+  const [isEditPostDialogOpen, setIsEditPostDialogOpen] = useState(false)
+
+  // Comment states
   const [commentDialogOpen, setCommentDialogOpen] = useState(false)
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null)
   const [comments, setComments] = useState<any[]>([])
   const [newComment, setNewComment] = useState("")
   const [commentsLoading, setCommentsLoading] = useState(false)
+
+  // Thoughts/Notes states
+  const [newThought, setNewThought] = useState({
+    title: "",
+    content: "",
+  })
+  const [editingThought, setEditingThought] = useState<null | Thought>(null)
+  const [isAddThoughtDialogOpen, setIsAddThoughtDialogOpen] = useState(false)
+  const [isEditThoughtDialogOpen, setIsEditThoughtDialogOpen] = useState(false)
 
   const cacheKey = `posts-${userId || session?.user?.id}`
 
@@ -97,73 +148,40 @@ export default function ProfilePage() {
         console.log("=== FRONTEND FETCH POSTS DEBUG START ===")
         console.log("Target user ID:", targetUserId)
         console.log("Force refresh:", forceRefresh)
-        console.log("Cache key:", cacheKey)
-        console.log("Current session user ID:", session?.user?.id)
 
         if (!forceRefresh) {
           const cachedPosts = sessionStorage.getItem(cacheKey)
           if (cachedPosts) {
             const parsed = JSON.parse(cachedPosts)
             const cacheAge = Date.now() - parsed.timestamp
-            console.log("Cache found, age:", cacheAge, "ms")
             if (cacheAge < 5 * 60 * 1000) {
               setPosts(parsed.data)
               console.log("✅ Posts loaded from cache:", parsed.data.length)
               setPostsLoading(false)
               return
-            } else {
-              console.log("Cache expired, fetching fresh data")
             }
-          } else {
-            console.log("No cache found")
           }
         }
 
         const apiUrl = `/api/posts?userId=${targetUserId}&t=${Date.now()}`
-        console.log("API URL:", apiUrl)
-        console.log("Making fetch request...")
-
         const postsResponse = await fetch(apiUrl)
-        console.log("Response status:", postsResponse.status)
-        console.log("Response ok:", postsResponse.ok)
-        console.log("Response headers:", Object.fromEntries(postsResponse.headers.entries()))
 
         if (postsResponse.ok) {
           const postsData = await postsResponse.json()
-          console.log("Posts data received:", {
-            hasPostsArray: Array.isArray(postsData.posts),
-            postsCount: postsData.posts?.length || 0,
-            rawData: postsData,
-          })
-
           const newPosts = postsData.posts || []
-          console.log("Setting posts state:", newPosts.length)
           setPosts(newPosts)
 
-          // Save to cache
           const cacheData = {
             data: newPosts,
             timestamp: Date.now(),
           }
           sessionStorage.setItem(cacheKey, JSON.stringify(cacheData))
-          console.log("✅ Posts saved to cache")
           console.log("✅ Successfully fetched posts:", newPosts.length)
         } else {
-          const errorText = await postsResponse.text()
-          console.error("❌ API Error Response:", errorText)
-          let errorData
-          try {
-            errorData = JSON.parse(errorText)
-          } catch {
-            errorData = { message: errorText }
-          }
-          const errorMessage = errorData.message || "Failed to fetch posts"
-          console.error("❌ Failed to fetch posts:", errorMessage)
-          throw new Error(errorMessage)
+          throw new Error("Failed to fetch posts")
         }
       } catch (error: any) {
         console.error("❌ Error fetching posts:", error)
-        console.error("Error stack:", error.stack)
         toast({
           title: "Error",
           description: "Failed to load posts. Please try again.",
@@ -171,29 +189,42 @@ export default function ProfilePage() {
         })
       } finally {
         setPostsLoading(false)
-        console.log("=== FRONTEND FETCH POSTS DEBUG END ===")
       }
     },
-    [cacheKey, session?.user?.id],
+    [cacheKey],
   )
+
+  const fetchThoughts = useCallback(async (targetUserId: string) => {
+    try {
+      setThoughtsLoading(true)
+      console.log("=== FETCHING THOUGHTS DEBUG ===")
+      console.log("Target user ID:", targetUserId)
+
+      const response = await fetch(`/api/thoughts?userId=${targetUserId}`)
+      console.log("Thoughts response status:", response.status)
+
+      if (response.ok) {
+        const thoughtsData = await response.json()
+        console.log("Thoughts fetched:", thoughtsData.length)
+        setThoughts(thoughtsData)
+      } else {
+        console.error("Failed to fetch thoughts")
+        setThoughts([])
+      }
+    } catch (error) {
+      console.error("Error fetching thoughts:", error)
+      setThoughts([])
+    } finally {
+      setThoughtsLoading(false)
+    }
+  }, [])
 
   const fetchFollowers = async (targetUserId: string) => {
     try {
-      console.log("=== FETCHING FOLLOWERS DEBUG ===")
-      console.log(`Fetching followers for user ID: ${targetUserId}`)
       const response = await fetch(`/api/users/${targetUserId}/followers`)
-      console.log(`Followers API URL: /api/users/${targetUserId}/followers`)
-      console.log("Response status:", response.status)
       if (response.ok) {
         const data = await response.json()
-        console.log("Followers data fetched:", data)
         setFollowers(data.followers || [])
-        console.log("✅ Successfully fetched followers:", data.followers?.length || 0)
-      } else {
-        const errorData = await response.json().catch(() => ({}))
-        const errorMessage = errorData.message || "Failed to fetch followers"
-        console.error("❌ Failed to fetch followers:", errorMessage)
-        throw new Error(errorMessage)
       }
     } catch (error) {
       console.error("❌ Error fetching followers:", error)
@@ -202,21 +233,10 @@ export default function ProfilePage() {
 
   const fetchFollowing = async (targetUserId: string) => {
     try {
-      console.log("=== FETCHING FOLLOWING DEBUG ===")
-      console.log(`Fetching following for user ID: ${targetUserId}`)
       const response = await fetch(`/api/users/${targetUserId}/following`)
-      console.log(`Following API URL: /api/users/${targetUserId}/following`)
-      console.log("Response status:", response.status)
       if (response.ok) {
         const data = await response.json()
-        console.log("Following data fetched:", data)
         setFollowing(data.following || [])
-        console.log("✅ Successfully fetched following:", data.following?.length || 0)
-      } else {
-        const errorData = await response.json().catch(() => ({}))
-        const errorMessage = errorData.message || "Failed to fetch following"
-        console.error("❌ Failed to fetch following:", errorMessage)
-        throw new Error(errorMessage)
       }
     } catch (error) {
       console.error("❌ Error fetching following:", error)
@@ -227,84 +247,31 @@ export default function ProfilePage() {
     const fetchProfile = async () => {
       try {
         setLoading(true)
-        console.log("=== PROFILE FETCH DEBUG START ===")
         const targetUserId = userId || session?.user?.id
-        console.log("Target user ID:", targetUserId)
-        console.log("Is own profile:", isOwnProfile)
-        console.log("Session user ID:", session?.user?.id)
 
-        if (!targetUserId) {
-          console.log("❌ No target user ID, returning")
-          return
-        }
+        if (!targetUserId) return
 
-        console.log(`Fetching profile for user ID: ${targetUserId}`)
+        // Fetch profile
         const response = await fetch(`/api/users/profile/${targetUserId}`)
-        console.log(`Profile API URL: /api/users/profile/${targetUserId}`)
-        console.log("Profile response status:", response.status)
-
         if (response.ok) {
           const data = await response.json()
-          console.log("Profile data fetched with counts:", {
-            username: data.user.username,
-            followers: data.user.followers,
-            following: data.user.following,
-            visitors: data.user.visitors,
-          })
           setUser(data.user)
           setEditedAbout(data.user.about || "")
-          console.log("✅ Successfully fetched profile with real counts")
-        } else {
-          const errorData = await response.json().catch(() => ({}))
-          const errorMessage = errorData.message || "Failed to fetch profile"
-          console.error("❌ Failed to fetch profile:", errorMessage)
-          throw new Error(errorMessage)
         }
 
-        console.log("Calling fetchPosts...")
-        await fetchPosts(targetUserId)
+        // Fetch posts and thoughts
+        await Promise.all([fetchPosts(targetUserId), fetchThoughts(targetUserId)])
 
+        // Fetch follow status if not own profile
         if (!isOwnProfile) {
-          console.log("Fetching follow status...")
           const followResponse = await fetch(`/api/users/${targetUserId}/follow-status`)
-          console.log(`Follow status API URL: /api/users/${targetUserId}/follow-status`)
-          console.log("Follow status response:", followResponse.status)
           if (followResponse.ok) {
             const followData = await followResponse.json()
-            console.log("Follow status data fetched:", followData)
             setIsFollowing(followData.isFollowing)
-            console.log("✅ Successfully fetched follow status")
-          } else {
-            const errorData = await followResponse.json().catch(() => ({}))
-            const errorMessage = errorData.message || "Failed to fetch follow status"
-            console.error("❌ Failed to fetch follow status:", errorMessage)
           }
-        }
 
-        // Track visitors
-        if (!isOwnProfile) {
-          try {
-            console.log("Recording visitor...")
-            const visitorResponse = await fetch(`/api/users/${targetUserId}/visit`, {
-              method: "POST",
-            })
-            console.log(`Visit API URL: /api/users/${targetUserId}/visit`)
-            console.log("Visitor response status:", visitorResponse.status)
-            if (visitorResponse.ok) {
-              console.log("✅ Visitor count updated successfully")
-              // Refresh profile to get updated visitor count
-              const updatedResponse = await fetch(`/api/users/profile/${targetUserId}`)
-              if (updatedResponse.ok) {
-                const updatedData = await updatedResponse.json()
-                setUser(updatedData.user)
-                console.log("✅ Profile updated with new visitor count:", updatedData.user.visitors)
-              }
-            } else {
-              console.error("❌ Failed to update visitor count")
-            }
-          } catch (error) {
-            console.error("❌ Error updating visitor count:", error)
-          }
+          // Record visit
+          await fetch(`/api/users/${targetUserId}/visit`, { method: "POST" })
         }
       } catch (error: any) {
         console.error("❌ Error fetching profile:", error)
@@ -315,18 +282,214 @@ export default function ProfilePage() {
         })
       } finally {
         setLoading(false)
-        console.log("=== PROFILE FETCH DEBUG END ===")
       }
     }
 
     if (session) {
-      console.log("Session available, fetching profile...")
       fetchProfile()
-    } else {
-      console.log("No session available")
     }
-  }, [userId, session, isOwnProfile, fetchPosts])
+  }, [userId, session, isOwnProfile, fetchPosts, fetchThoughts])
 
+  // Post editing functions
+  const handleEditPost = (post: Post) => {
+    setEditingPostId(post.id)
+    setEditingPostContent(post.content)
+    setEditingPostMedia(post.image || post.video || null)
+    setEditingPostMediaType(post.image ? "image" : post.video ? "video" : null)
+    setIsEditPostDialogOpen(true)
+  }
+
+  const handleSavePostEdit = async () => {
+    if (!editingPostId || (!editingPostContent.trim() && !editingPostMedia && !newEditMedia)) return
+
+    try {
+      const formData = new FormData()
+      formData.append("content", editingPostContent.trim())
+
+      if (removeEditMedia) {
+        formData.append("removeMedia", "true")
+      } else if (newEditMedia) {
+        formData.append("media", newEditMedia)
+      }
+
+      const response = await fetch(`/api/posts/${editingPostId}`, {
+        method: "PUT",
+        body: formData,
+      })
+
+      if (response.ok) {
+        const updatedPost = await response.json()
+        const updatedPosts = posts.map((post) =>
+          post.id === editingPostId
+            ? {
+                ...post,
+                content: updatedPost.content,
+                image: updatedPost.image,
+                video: updatedPost.video,
+              }
+            : post,
+        )
+        setPosts(updatedPosts)
+
+        sessionStorage.setItem(
+          cacheKey,
+          JSON.stringify({
+            data: updatedPosts,
+            timestamp: Date.now(),
+          }),
+        )
+
+        setIsEditPostDialogOpen(false)
+        setEditingPostId(null)
+        setEditingPostContent("")
+        setEditingPostMedia(null)
+        setEditingPostMediaType(null)
+        setNewEditMedia(null)
+        setRemoveEditMedia(false)
+
+        toast({
+          title: "Success",
+          description: "Post updated successfully!",
+        })
+      } else {
+        throw new Error("Failed to update post")
+      }
+    } catch (error) {
+      console.error("Error updating post:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update post. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Thoughts functions
+  const thoughtsCharCount = thoughts.reduce((acc, t) => acc + t.content.length, 0)
+  const remainingChars = MAX_TOTAL_CHARS - thoughtsCharCount
+  const usagePercentage = (thoughtsCharCount / MAX_TOTAL_CHARS) * 100
+
+  const handleAddThought = async () => {
+    if (!newThought.title || !newThought.content) return
+
+    if (newThought.content.length > remainingChars) {
+      toast({
+        title: "Error",
+        description: `You only have ${remainingChars} characters remaining. This note is too long.`,
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const response = await fetch("/api/thoughts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newThought.title,
+          content: newThought.content,
+        }),
+      })
+
+      if (response.ok) {
+        const savedThought = await response.json()
+        setThoughts([savedThought, ...thoughts])
+        setNewThought({ title: "", content: "" })
+        setIsAddThoughtDialogOpen(false)
+
+        toast({
+          title: "Success",
+          description: "Note saved successfully!",
+        })
+      } else {
+        throw new Error("Failed to save note")
+      }
+    } catch (error) {
+      console.error("Error saving thought:", error)
+      toast({
+        title: "Error",
+        description: "Failed to save note. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleEditThought = async () => {
+    if (!editingThought || !editingThought.title || !editingThought.content) return
+
+    const originalThought = thoughts.find((t) => t.id === editingThought.id)
+    const charDifference = editingThought.content.length - (originalThought?.content.length || 0)
+
+    if (charDifference > 0 && charDifference > remainingChars) {
+      toast({
+        title: "Error",
+        description: `You only have ${remainingChars} characters remaining. This edit adds too many characters.`,
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/thoughts/${editingThought.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: editingThought.title,
+          content: editingThought.content,
+        }),
+      })
+
+      if (response.ok) {
+        const updatedThought = await response.json()
+        setThoughts(thoughts.map((t) => (t.id === editingThought.id ? updatedThought : t)))
+        setEditingThought(null)
+        setIsEditThoughtDialogOpen(false)
+
+        toast({
+          title: "Success",
+          description: "Note updated successfully!",
+        })
+      } else {
+        throw new Error("Failed to update note")
+      }
+    } catch (error) {
+      console.error("Error updating thought:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update note. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeleteThought = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this note?")) return
+
+    try {
+      const response = await fetch(`/api/thoughts/${id}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        setThoughts(thoughts.filter((t) => t.id !== id))
+        toast({
+          title: "Success",
+          description: "Note deleted successfully!",
+        })
+      } else {
+        throw new Error("Failed to delete note")
+      }
+    } catch (error) {
+      console.error("Error deleting thought:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete note. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Comment functions
   const handleOpenComments = async (postId: number) => {
     setSelectedPostId(postId)
     setCommentDialogOpen(true)
@@ -336,18 +499,11 @@ export default function ProfilePage() {
   const fetchComments = async (postId: number) => {
     try {
       setCommentsLoading(true)
-      console.log("=== FETCHING COMMENTS DEBUG ===")
-      console.log("Fetching comments for post ID:", postId)
-
       const response = await fetch(`/api/posts/${postId}/comments`)
-      console.log("Comments response status:", response.status)
-
       if (response.ok) {
         const data = await response.json()
-        console.log("Comments fetched:", data.comments?.length || 0)
         setComments(data.comments || [])
       } else {
-        console.error("Failed to fetch comments")
         setComments([])
       }
     } catch (error) {
@@ -362,25 +518,17 @@ export default function ProfilePage() {
     if (!newComment.trim() || !selectedPostId) return
 
     try {
-      console.log("=== SUBMIT COMMENT DEBUG ===")
-      console.log("Submitting comment for post ID:", selectedPostId)
-
       const response = await fetch(`/api/posts/${selectedPostId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: newComment.trim() }),
       })
 
-      console.log("Comment submit response status:", response.status)
-
       if (response.ok) {
         const newCommentData = await response.json()
-        console.log("Comment created:", newCommentData)
-
         setComments([newCommentData, ...comments])
         setNewComment("")
 
-        // Update post comment count in the posts list
         const updatedPosts = posts.map((post) =>
           post.id === selectedPostId ? { ...post, comments: post.comments + 1 } : post,
         )
@@ -391,8 +539,7 @@ export default function ProfilePage() {
           description: "Comment added successfully!",
         })
       } else {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || "Failed to add comment")
+        throw new Error("Failed to add comment")
       }
     } catch (error) {
       console.error("Error submitting comment:", error)
@@ -404,27 +551,18 @@ export default function ProfilePage() {
     }
   }
 
-  // Add delete comment handler after handleSubmitComment
   const handleDeleteComment = async (commentId: number) => {
-    if (!confirm("Are you sure you want to delete this comment?")) {
-      return
-    }
+    if (!confirm("Are you sure you want to delete this comment?")) return
 
     try {
-      console.log("=== DELETE COMMENT DEBUG ===")
-      console.log("Deleting comment ID:", commentId)
-
       const response = await fetch(`/api/posts/${selectedPostId}/comments?commentId=${commentId}`, {
         method: "DELETE",
       })
-      console.log("Delete comment response status:", response.status)
 
       if (response.ok) {
-        // Remove comment from state
         const updatedComments = comments.filter((comment) => comment.id !== commentId)
         setComments(updatedComments)
 
-        // Update post comment count in the posts list
         const updatedPosts = posts.map((post) =>
           post.id === selectedPostId ? { ...post, comments: Math.max(0, post.comments - 1) } : post,
         )
@@ -434,15 +572,11 @@ export default function ProfilePage() {
           title: "Success",
           description: "Comment deleted successfully!",
         })
-        console.log("✅ Comment deleted successfully")
       } else {
-        const errorData = await response.json().catch(() => ({}))
-        const errorMessage = errorData.message || "Failed to delete comment"
-        console.error("❌ Failed to delete comment:", errorMessage)
-        throw new Error(errorMessage)
+        throw new Error("Failed to delete comment")
       }
     } catch (error) {
-      console.error("❌ Error deleting comment:", error)
+      console.error("Error deleting comment:", error)
       toast({
         title: "Error",
         description: "Failed to delete comment. Please try again.",
@@ -451,27 +585,26 @@ export default function ProfilePage() {
     }
   }
 
-  // Add delete post handler
+  // Other existing functions (handleDeletePost, handleSharePost, etc.) remain the same...
   const handleDeletePost = async (postId: number) => {
     if (!confirm("Are you sure you want to delete this post?")) {
       return
     }
 
     try {
-      console.log("=== DELETE POST DEBUG ===")
+      console.log("=== FRONTEND DELETE POST DEBUG ===")
       console.log("Deleting post ID:", postId)
 
       const response = await fetch(`/api/posts/${postId}`, {
         method: "DELETE",
       })
+
       console.log("Delete response status:", response.status)
 
       if (response.ok) {
-        // Remove post from state
         const updatedPosts = posts.filter((post) => post.id !== postId)
         setPosts(updatedPosts)
 
-        // Update cache
         sessionStorage.setItem(
           cacheKey,
           JSON.stringify({
@@ -484,39 +617,30 @@ export default function ProfilePage() {
           title: "Success",
           description: "Post deleted successfully!",
         })
-        console.log("✅ Post deleted successfully")
       } else {
-        const errorData = await response.json().catch(() => ({}))
-        const errorMessage = errorData.message || "Failed to delete post"
-        console.error("❌ Failed to delete post:", errorMessage)
-        throw new Error(errorMessage)
+        const errorData = await response.json()
+        console.error("Delete error response:", errorData)
+        throw new Error(errorData.error || "Failed to delete post")
       }
     } catch (error) {
-      console.error("❌ Error deleting post:", error)
+      console.error("Error deleting post:", error)
       toast({
         title: "Error",
-        description: "Failed to delete post. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to delete post. Please try again.",
         variant: "destructive",
       })
     }
   }
 
-  // Add share post handler
   const handleSharePost = async (postId: number) => {
     try {
-      console.log("=== SHARE POST DEBUG ===")
-      console.log("Sharing post ID:", postId)
-
       const response = await fetch(`/api/posts/${postId}/share`, {
         method: "POST",
       })
-      console.log("Share response status:", response.status)
 
       if (response.ok) {
         const shareData = await response.json()
-        console.log("Share data received:", shareData)
 
-        // Try to use native Web Share API if available
         if (navigator.share) {
           try {
             await navigator.share({
@@ -524,93 +648,51 @@ export default function ProfilePage() {
               text: shareData.text,
               url: shareData.url,
             })
-            console.log("✅ Shared via Web Share API")
             return
           } catch (shareError) {
-            console.log("Web Share API failed, falling back to clipboard")
+            // Fallback to clipboard
           }
         }
 
-        // Fallback: Copy to clipboard
         await navigator.clipboard.writeText(shareData.url)
         toast({
           title: "Link Copied!",
           description: "Post link has been copied to your clipboard.",
         })
-        console.log("✅ Link copied to clipboard")
       } else {
-        const errorData = await response.json().catch(() => ({}))
-        const errorMessage = errorData.message || "Failed to share post"
-        console.error("❌ Failed to share post:", errorMessage)
-        throw new Error(errorMessage)
+        throw new Error("Failed to share post")
       }
     } catch (error) {
-      console.error("❌ Error sharing post:", error)
+      console.error("Error sharing post:", error)
       toast({
         title: "Error",
         description: "Failed to share post. Please try again.",
-        variant: "destructive",
       })
     }
   }
-
-  useEffect(() => {
-    return () => {
-      const currentCacheKey = `posts-${userId || session?.user?.id}`
-      if (currentCacheKey !== cacheKey) {
-        sessionStorage.removeItem(currentCacheKey)
-        console.log("Cache cleaned up:", currentCacheKey)
-      }
-    }
-  }, [userId, session?.user?.id, cacheKey])
 
   const handlePostSubmit = async () => {
     if (!newPost.trim() && !imagePreview) return
 
     try {
-      console.log("=== POST SUBMIT DEBUG START ===")
       const formData = new FormData()
       formData.append("content", newPost)
       if (imageFile) {
-        formData.append("image", imageFile)
-        console.log("Image file added to form data:", {
-          name: imageFile.name,
-          size: imageFile.size,
-          type: imageFile.type,
-        })
+        formData.append("media", imageFile)
       }
 
-      console.log("Form data contents:")
-      for (const [key, value] of formData.entries()) {
-        if (value instanceof File) {
-          console.log(`${key}: File(${value.name}, ${value.size} bytes)`)
-        } else {
-          console.log(`${key}: ${value}`)
-        }
-      }
-
-      console.log("Creating new post...")
       const response = await fetch("/api/posts", {
         method: "POST",
         body: formData,
       })
-      console.log("Create post API URL: /api/posts")
-      console.log("Response status:", response.status)
-      console.log("Response ok:", response.ok)
 
       if (response.ok) {
         const newPostData = await response.json()
-        console.log("New post created:", newPostData)
-
-        // Clear cache to force refresh
         sessionStorage.removeItem(cacheKey)
-        console.log("Cache cleared for fresh data")
 
         const updatedPosts = [newPostData, ...posts]
         setPosts(updatedPosts)
-        console.log("Posts state updated, new count:", updatedPosts.length)
 
-        // Save updated posts to cache
         sessionStorage.setItem(
           cacheKey,
           JSON.stringify({
@@ -618,7 +700,6 @@ export default function ProfilePage() {
             timestamp: Date.now(),
           }),
         )
-        console.log("Updated posts saved to cache")
 
         setNewPost("")
         setImageFile(null)
@@ -628,53 +709,26 @@ export default function ProfilePage() {
           title: "Success",
           description: "Post created successfully!",
         })
-        console.log("✅ Successfully created post")
-
-        // Force refresh posts to verify persistence
-        console.log("Force refreshing posts to verify persistence...")
-        const targetUserId = userId || session?.user?.id
-        if (targetUserId) {
-          await fetchPosts(targetUserId, true)
-        }
       } else {
-        const errorText = await response.text()
-        console.error("❌ API Error Response:", errorText)
-        let errorData
-        try {
-          errorData = JSON.parse(errorText)
-        } catch {
-          errorData = { message: errorText }
-        }
-        const errorMessage = errorData.message || "Failed to create post"
-        console.error("❌ Failed to create post:", errorMessage)
-        throw new Error(errorMessage)
+        throw new Error("Failed to create post")
       }
     } catch (error: any) {
-      console.error("❌ Error creating post:", error)
-      console.error("Error stack:", error.stack)
+      console.error("Error creating post:", error)
       toast({
         title: "Error",
         description: "Failed to create post. Please try again.",
-        variant: "destructive",
       })
-    } finally {
-      console.log("=== POST SUBMIT DEBUG END ===")
     }
   }
 
   const handleLikePost = async (postId: number) => {
     try {
-      console.log("=== LIKE POST DEBUG ===")
-      console.log(`Liking post with ID: ${postId}`)
       const response = await fetch(`/api/posts/${postId}/like`, {
         method: "POST",
       })
-      console.log(`Like post API URL: /api/posts/${postId}/like`)
-      console.log("Like response status:", response.status)
 
       if (response.ok) {
         const updatedPost = await response.json()
-        console.log("Post liked:", updatedPost)
         const updatedPosts = posts.map((post) =>
           post.id === postId ? { ...post, likes: updatedPost.likes, isLiked: updatedPost.isLiked } : post,
         )
@@ -687,48 +741,28 @@ export default function ProfilePage() {
             timestamp: Date.now(),
           }),
         )
-        console.log("Posts saved to cache")
-        console.log("✅ Successfully liked post")
       } else {
-        const errorData = await response.json().catch(() => ({}))
-        const errorMessage = errorData.message || "Failed to like post"
-        console.error("❌ Failed to like post:", errorMessage)
-        throw new Error(errorMessage)
+        throw new Error("Failed to like post")
       }
     } catch (error) {
-      console.error("❌ Error liking post:", error)
+      console.error("Error liking post:", error)
       toast({
         title: "Error",
         description: "Failed to like post. Please try again.",
-        variant: "destructive",
       })
     }
   }
 
-  const handleImageChange = (file: File | null) => {
-    console.log("=== IMAGE CHANGE DEBUG ===")
-    console.log(
-      "File selected:",
-      file
-        ? {
-            name: file.name,
-            size: file.size,
-            type: file.type,
-          }
-        : "null",
-    )
-
+  const handleMediaChange = (file: File | null) => {
     setImageFile(file)
     if (file) {
       const reader = new FileReader()
       reader.onloadend = () => {
         setImagePreview(reader.result as string)
-        console.log("✅ Image preview set")
       }
       reader.readAsDataURL(file)
     } else {
       setImagePreview(null)
-      console.log("Image preview cleared")
     }
   }
 
@@ -756,9 +790,6 @@ export default function ProfilePage() {
 
     try {
       setProfileImageUploading(true)
-      console.log("=== PROFILE IMAGE UPLOAD DEBUG ===")
-      console.log("Uploading profile image...")
-
       const formData = new FormData()
       formData.append("profileImage", file)
 
@@ -766,13 +797,9 @@ export default function ProfilePage() {
         method: "POST",
         body: formData,
       })
-      console.log("Profile image API URL: /api/users/profile-image")
-      console.log("Profile image response status:", response.status)
 
       if (response.ok) {
         const data = await response.json()
-        console.log("Profile image uploaded:", data)
-
         setUser((prev) =>
           prev
             ? {
@@ -783,29 +810,18 @@ export default function ProfilePage() {
             : null,
         )
 
-        const profileCacheKeys = Object.keys(sessionStorage).filter(
-          (key) => key.startsWith("profile-") || key.startsWith("posts-"),
-        )
-        profileCacheKeys.forEach((key) => sessionStorage.removeItem(key))
-        console.log("Profile cache cleared")
-
         toast({
           title: "Success",
           description: "Profile picture updated successfully!",
         })
-        console.log("✅ Successfully updated profile picture")
       } else {
-        const errorData = await response.json().catch(() => ({}))
-        const errorMessage = errorData.message || "Failed to upload image"
-        console.error("❌ Failed to upload image:", errorMessage)
-        throw new Error(errorMessage)
+        throw new Error("Failed to upload image")
       }
     } catch (error: any) {
-      console.error("❌ Error uploading profile image:", error)
+      console.error("Error uploading profile image:", error)
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to upload profile picture. Please try again.",
-        variant: "destructive",
+        description: "Failed to upload profile picture. Please try again.",
       })
     } finally {
       setProfileImageUploading(false)
@@ -815,8 +831,6 @@ export default function ProfilePage() {
 
   const handleSaveAbout = async () => {
     try {
-      console.log("=== SAVE ABOUT DEBUG ===")
-      console.log("Updating about section...")
       const response = await fetch("/api/users/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -824,12 +838,9 @@ export default function ProfilePage() {
           about: editedAbout,
         }),
       })
-      console.log("Update about API URL: /api/users/profile")
-      console.log("About response status:", response.status)
 
       if (response.ok) {
         const data = await response.json()
-        console.log("About section updated:", data)
         setUser((prev) => (prev ? { ...prev, about: data.user?.about || editedAbout } : null))
         setIsEditingAbout(false)
 
@@ -837,19 +848,14 @@ export default function ProfilePage() {
           title: "Success",
           description: "About section updated successfully!",
         })
-        console.log("✅ Successfully updated about section")
       } else {
-        const errorData = await response.json().catch(() => ({}))
-        const errorMessage = errorData.message || "Failed to update about section"
-        console.error("❌ Failed to update about section:", errorMessage)
-        throw new Error(errorMessage)
+        throw new Error("Failed to update about section")
       }
     } catch (error) {
-      console.error("❌ Error updating about:", error)
+      console.error("Error updating about:", error)
       toast({
         title: "Error",
         description: "Failed to update about section. Please try again.",
-        variant: "destructive",
       })
     }
   }
@@ -858,13 +864,9 @@ export default function ProfilePage() {
     if (!user || isOwnProfile) return
 
     try {
-      console.log("=== FOLLOW TOGGLE DEBUG ===")
-      console.log(`Toggling follow status for user ID: ${user.id}, isFollowing: ${isFollowing}`)
       const response = await fetch(`/api/users/${user.id}/follow`, {
         method: isFollowing ? "DELETE" : "POST",
       })
-      console.log(`Follow toggle API URL: /api/users/${user.id}/follow`)
-      console.log("Follow toggle response status:", response.status)
 
       if (response.ok) {
         setIsFollowing(!isFollowing)
@@ -881,19 +883,14 @@ export default function ProfilePage() {
           title: "Success",
           description: isFollowing ? "Unfollowed successfully!" : "Following successfully!",
         })
-        console.log("✅ Successfully toggled follow status")
       } else {
-        const errorData = await response.json().catch(() => ({}))
-        const errorMessage = errorData.message || "Failed to toggle follow status"
-        console.error("❌ Failed to toggle follow status:", errorMessage)
-        throw new Error(errorMessage)
+        throw new Error("Failed to toggle follow status")
       }
     } catch (error) {
-      console.error("❌ Error toggling follow:", error)
+      console.error("Error toggling follow:", error)
       toast({
         title: "Error",
         description: "Failed to update follow status. Please try again.",
-        variant: "destructive",
       })
     }
   }
@@ -902,27 +899,20 @@ export default function ProfilePage() {
     if (!user || isOwnProfile) return
 
     try {
-      console.log("=== MESSAGE DEBUG ===")
-      console.log(`Creating message channel for user ID: ${user.id}`)
       const response = await fetch("/api/stream/channel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ recipientId: user.id }),
       })
-      console.log("Create channel API URL: /api/stream/channel")
-      console.log("Channel response status:", response.status)
 
       if (response.ok) {
         const data = await response.json()
-        console.log("Channel created:", data)
         router.push(`/messages/${user.id}`)
-        console.log("✅ Successfully created channel")
       } else {
-        console.log("Channel creation failed, redirecting anyway")
         router.push(`/messages/${user.id}`)
       }
     } catch (error) {
-      console.error("❌ Error creating channel:", error)
+      console.error("Error creating channel:", error)
       router.push(`/messages/${user.id}`)
     }
   }
@@ -951,16 +941,6 @@ export default function ProfilePage() {
     })
   }
 
-  // Debug component state
-  useEffect(() => {
-    console.log("=== COMPONENT STATE DEBUG ===")
-    console.log("Posts state:", posts.length)
-    console.log("User state:", user ? { id: user.id, username: user.username } : null)
-    console.log("Loading state:", loading)
-    console.log("Posts loading state:", postsLoading)
-    console.log("Session state:", session ? { id: session.user?.id, email: session.user?.email } : null)
-  }, [posts, user, loading, postsLoading, session])
-
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -979,16 +959,11 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-      {/* Enhanced Mobile-Optimized Hero Section */}
+      {/* Profile Header - Same as before */}
       <div className="relative mb-6">
-        {/* Background gradient */}
         <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-white to-blue-50 rounded-2xl sm:rounded-3xl"></div>
-
-        {/* Content */}
         <div className="relative p-4 sm:p-6 lg:p-8">
-          {/* Mobile: Stack profile picture and info vertically */}
           <div className="flex flex-col items-center text-center sm:flex-row sm:items-start sm:gap-6 sm:text-left">
-            {/* Profile Picture */}
             <div className="flex flex-col items-center mb-4 sm:mb-0 sm:flex-shrink-0">
               <div className="relative group">
                 <div className="relative h-24 w-24 sm:h-28 sm:w-28 lg:h-32 lg:w-32 overflow-hidden rounded-full bg-gradient-to-br from-blue-400 to-blue-600 p-1 shadow-xl">
@@ -1031,7 +1006,6 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* Profile Info */}
             <div className="flex-1 w-full">
               <div className="flex flex-col items-center sm:items-start">
                 <div className="mb-3 sm:mb-4">
@@ -1061,7 +1035,6 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                {/* Mobile-optimized Action Buttons */}
                 {!isOwnProfile && (
                   <div className="flex gap-2 w-full sm:w-auto">
                     <Button
@@ -1076,8 +1049,7 @@ export default function ProfilePage() {
                       {isFollowing ? (
                         <>
                           <Check className="h-4 w-4 mr-1 sm:mr-2" />
-                          <span className="hidden sm:inline">Following</span>
-                          <span className="sm:hidden">Following</span>
+                          Following
                         </>
                       ) : (
                         <>
@@ -1101,7 +1073,7 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* About Section - Full width on mobile */}
+          {/* About Section */}
           <div className="mt-4 sm:mt-6">
             {isEditingAbout ? (
               <div className="space-y-3">
@@ -1232,28 +1204,57 @@ export default function ProfilePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Mobile-Optimized Content Tabs */}
+      {/* Enhanced Tabs with Posts and Notes - REMOVED COUNTS */}
       <Tabs defaultValue="posts" className="w-full">
-        <TabsList className="grid w-full grid-cols-1 rounded-xl sm:rounded-2xl bg-blue-50 p-1 mb-6">
+        <TabsList className="grid w-full grid-cols-2 rounded-xl sm:rounded-2xl bg-blue-50 p-1 mb-6">
           <TabsTrigger
             value="posts"
             className="rounded-lg sm:rounded-xl data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm font-medium text-sm sm:text-base py-2"
           >
-            Posts ({posts.length})
+            Posts
             {postsLoading && <div className="ml-2 animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>}
+          </TabsTrigger>
+          <TabsTrigger
+            value="notes"
+            className="rounded-lg sm:rounded-xl data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm font-medium text-sm sm:text-base py-2"
+          >
+            Notes
+            {thoughtsLoading && (
+              <div className="ml-2 animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+            )}
           </TabsTrigger>
         </TabsList>
 
+        {/* Posts Tab */}
         <TabsContent value="posts" className="space-y-4 sm:space-y-6">
-          {/* Posts header */}
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold text-gray-900">
               {isOwnProfile ? "Your Posts" : `${user.username}'s Posts`}
             </h2>
-            <div className="text-sm text-gray-500">Total: {posts.length}</div>
+            <div className="flex items-center gap-2">
+              <div className="text-sm text-gray-500">Total: {posts.length}</div>
+              <div className="flex rounded-lg border border-blue-200 p-1">
+                <Button
+                  variant={postsViewMode === "grid" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setPostsViewMode("grid")}
+                  className="h-8 w-8 p-0"
+                >
+                  <Grid3X3 className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={postsViewMode === "list" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setPostsViewMode("list")}
+                  className="h-8 w-8 p-0"
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </div>
 
-          {/* Mobile-Optimized Post Creation Widget */}
+          {/* Post Creation Widget */}
           {isOwnProfile && (
             <Card className="rounded-xl sm:rounded-2xl border-blue-100 shadow-sm bg-gradient-to-br from-white to-blue-50/30">
               <CardContent className="p-4 sm:p-6">
@@ -1310,10 +1311,10 @@ export default function ProfilePage() {
                           <span>Attach</span>
                           <input
                             type="file"
-                            accept="image/*"
+                            accept="image/*,video/*"
                             onChange={(e) => {
                               const file = e.target.files?.[0] || null
-                              handleImageChange(file)
+                              handleMediaChange(file)
                             }}
                             className="hidden"
                           />
@@ -1334,134 +1335,239 @@ export default function ProfilePage() {
             </Card>
           )}
 
-          {/* Mobile-Optimized Posts */}
-          <div className="space-y-4 sm:space-y-6">
+          {/* Posts Display */}
+          <div
+            className={
+              postsViewMode === "grid"
+                ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                : "space-y-4 sm:space-y-6"
+            }
+          >
             {posts.length > 0 ? (
               posts.map((post) => (
                 <Card
                   key={post.id}
-                  className="rounded-xl sm:rounded-2xl border-blue-100 shadow-sm hover:shadow-md transition-all bg-white overflow-hidden"
+                  className={cn(
+                    "rounded-xl border-blue-100 shadow-sm hover:shadow-md transition-all bg-white overflow-hidden",
+                    postsViewMode === "grid" ? "aspect-square" : "sm:rounded-2xl",
+                  )}
                 >
-                  <CardContent className="p-3 sm:p-6">
-                    <div className="flex gap-2 sm:gap-4">
-                      <div className="relative h-8 w-8 sm:h-12 sm:w-12 flex-shrink-0 overflow-hidden rounded-full">
-                        <Image
-                          src={user.profileImage || user.image || "/placeholder.svg?height=48&width=48"}
-                          alt={user.username}
-                          fill
-                          className="object-cover"
-                          sizes="(max-width: 640px) 32px, 48px"
-                        />
-                      </div>
-                      <div className="flex-1 space-y-2 sm:space-y-4 min-w-0">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
-                              <h3 className="font-semibold text-gray-900 text-xs sm:text-base truncate">
-                                {user.nickname || user.username}
-                              </h3>
-                              <span className="text-xs text-gray-500 truncate">@{user.username}</span>
-                            </div>
-                            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1">{formatDate(post.createdAt)}</p>
+                  <CardContent className={cn("p-3", postsViewMode === "grid" ? "h-full flex flex-col" : "sm:p-6")}>
+                    {postsViewMode === "grid" ? (
+                      // Grid view - Instagram style
+                      <div className="flex flex-col h-full">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="relative h-6 w-6 overflow-hidden rounded-full">
+                            <Image
+                              src={user.profileImage || user.image || "/placeholder.svg?height=24&width=24"}
+                              alt={user.username}
+                              fill
+                              className="object-cover"
+                              sizes="24px"
+                            />
                           </div>
+                          <span className="text-xs font-medium text-gray-900 truncate">
+                            {user.nickname || user.username}
+                          </span>
                           {isOwnProfile && (
-                            <div className="flex items-center gap-1">
+                            <div className="ml-auto flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEditPost(post)}
+                                className="h-5 w-5 rounded-full hover:bg-blue-100 hover:text-blue-600"
+                                title="Edit post"
+                              >
+                                <Edit className="h-3 w-3" />
+                              </Button>
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleDeletePost(post.id)}
-                                className="h-6 w-6 sm:h-8 sm:w-8 rounded-full hover:bg-red-100 hover:text-red-600 flex-shrink-0"
+                                className="h-5 w-5 rounded-full hover:bg-red-100 hover:text-red-600"
                                 title="Delete post"
                               >
-                                <svg
-                                  className="h-3 w-3 sm:h-4 sm:w-4"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                  />
-                                </svg>
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 sm:h-8 sm:w-8 rounded-full hover:bg-gray-100 flex-shrink-0"
-                              >
-                                <MoreHorizontal className="h-3 w-3 sm:h-4 sm:w-4" />
+                                <Trash2 className="h-3 w-3" />
                               </Button>
                             </div>
                           )}
-                          {!isOwnProfile && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 sm:h-8 sm:w-8 rounded-full hover:bg-gray-100 flex-shrink-0"
-                            >
-                              <MoreHorizontal className="h-3 w-3 sm:h-4 sm:w-4" />
-                            </Button>
-                          )}
                         </div>
 
-                        <p className="text-gray-800 leading-relaxed text-sm sm:text-base break-words">{post.content}</p>
-
-                        {post.image && (
-                          <div className="rounded-lg sm:rounded-xl overflow-hidden">
+                        {post.video ? (
+                          <div className="flex-1 rounded-lg overflow-hidden mb-2">
+                            <video
+                              src={post.video}
+                              className="w-full h-full object-cover"
+                              controls
+                              preload="metadata"
+                            />
+                          </div>
+                        ) : post.image ? (
+                          <div className="flex-1 rounded-lg overflow-hidden mb-2">
                             <Image
                               src={post.image || "/placeholder.svg"}
                               alt="Post image"
-                              width={500}
+                              width={300}
                               height={300}
-                              className="w-full object-cover max-h-48 sm:max-h-80"
+                              className="w-full h-full object-cover"
                             />
+                          </div>
+                        ) : (
+                          <div className="flex-1 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-3 mb-2 flex items-center justify-center">
+                            <p className="text-xs text-gray-700 text-center line-clamp-4">{post.content}</p>
                           </div>
                         )}
 
-                        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                          <div className="flex items-center gap-2 sm:gap-6">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleOpenComments(post.id)}
-                              className="flex items-center gap-1 rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors px-2 py-1"
-                            >
-                              <MessageCircle className="h-3 w-3 sm:h-5 sm:w-5" />
-                              <span className="font-medium text-xs sm:text-sm">{post.comments}</span>
-                            </Button>
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-3">
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => handleLikePost(post.id)}
                               className={cn(
-                                "flex items-center gap-1 rounded-full transition-colors px-2 py-1 -ml-2",
-                                post.isLiked ? "text-red-600 hover:bg-red-50" : "hover:bg-red-50 hover:text-red-600",
+                                "flex items-center gap-1 p-1 h-auto",
+                                post.isLiked ? "text-red-600" : "text-gray-600",
                               )}
                             >
-                              <Heart className={cn("h-3 w-3 sm:h-5 sm:w-5", post.isLiked && "fill-current")} />
-                              <span className="font-medium text-xs sm:text-sm">{post.likes}</span>
+                              <Heart className={cn("h-3 w-3", post.isLiked && "fill-current")} />
+                              <span>{post.likes}</span>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleOpenComments(post.id)}
+                              className="flex items-center gap-1 p-1 h-auto text-gray-600"
+                            >
+                              <MessageCircle className="h-3 w-3" />
+                              <span>{post.comments}</span>
                             </Button>
                           </div>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleSharePost(post.id)}
-                            className="rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors p-1"
-                            title="Share post"
+                            className="p-1 h-auto text-gray-600"
                           >
-                            <Share2 className="h-3 w-3 sm:h-5 sm:w-5" />
+                            <Share2 className="h-3 w-3" />
                           </Button>
                         </div>
                       </div>
-                    </div>
+                    ) : (
+                      // List view - Facebook style
+                      <div className="flex gap-2 sm:gap-4">
+                        <div className="relative h-8 w-8 sm:h-12 sm:w-12 flex-shrink-0 overflow-hidden rounded-full">
+                          <Image
+                            src={user.profileImage || user.image || "/placeholder.svg?height=48&width=48"}
+                            alt={user.username}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 640px) 32px, 48px"
+                          />
+                        </div>
+                        <div className="flex-1 space-y-2 sm:space-y-4 min-w-0">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                                <h3 className="font-semibold text-gray-900 text-xs sm:text-base truncate">
+                                  {user.nickname || user.username}
+                                </h3>
+                                <span className="text-xs text-gray-500 truncate">@{user.username}</span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-0.5 sm:mt-1">{formatDate(post.createdAt)}</p>
+                            </div>
+                            {isOwnProfile && (
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEditPost(post)}
+                                  className="h-6 w-6 sm:h-8 sm:w-8 rounded-full hover:bg-blue-100 hover:text-blue-600 flex-shrink-0"
+                                  title="Edit post"
+                                >
+                                  <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeletePost(post.id)}
+                                  className="h-6 w-6 sm:h-8 sm:w-8 rounded-full hover:bg-red-100 hover:text-red-600 flex-shrink-0"
+                                  title="Delete post"
+                                >
+                                  <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+
+                          <p className="text-gray-800 leading-relaxed text-sm sm:text-base break-words">
+                            {post.content}
+                          </p>
+
+                          {post.video && (
+                            <div className="rounded-lg sm:rounded-xl overflow-hidden">
+                              <video
+                                src={post.video}
+                                className="w-full object-cover max-h-48 sm:max-h-80"
+                                controls
+                                preload="metadata"
+                              />
+                            </div>
+                          )}
+
+                          {post.image && (
+                            <div className="rounded-lg sm:rounded-xl overflow-hidden">
+                              <Image
+                                src={post.image || "/placeholder.svg"}
+                                alt="Post image"
+                                width={500}
+                                height={300}
+                                className="w-full object-cover max-h-48 sm:max-h-80"
+                              />
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                            <div className="flex items-center gap-2 sm:gap-6">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleOpenComments(post.id)}
+                                className="flex items-center gap-1 rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors px-2 py-1"
+                              >
+                                <MessageCircle className="h-3 w-3 sm:h-5 sm:w-5" />
+                                <span className="font-medium text-xs sm:text-sm">{post.comments}</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleLikePost(post.id)}
+                                className={cn(
+                                  "flex items-center gap-1 rounded-full transition-colors px-2 py-1 -ml-2",
+                                  post.isLiked ? "text-red-600 hover:bg-red-50" : "hover:bg-red-50 hover:text-red-600",
+                                )}
+                              >
+                                <Heart className={cn("h-3 w-3 sm:h-5 sm:w-5", post.isLiked && "fill-current")} />
+                                <span className="font-medium text-xs sm:text-sm">{post.likes}</span>
+                              </Button>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleSharePost(post.id)}
+                              className="rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors p-1"
+                              title="Share post"
+                            >
+                              <Share2 className="h-3 w-3 sm:h-5 sm:w-5" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ))
             ) : (
-              <div className="text-center py-8 sm:py-12 text-gray-500">
+              <div className="text-center py-8 sm:py-12 text-gray-500 col-span-full">
                 <div className="text-sm sm:text-base">
                   {isOwnProfile ? "You haven't posted anything yet." : "No posts to show."}
                 </div>
@@ -1472,7 +1578,360 @@ export default function ProfilePage() {
             )}
           </div>
         </TabsContent>
+
+        {/* Notes Tab */}
+        <TabsContent value="notes" className="space-y-4 sm:space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg sm:text-xl font-semibold text-blue-600">
+              {isOwnProfile ? "Your Notes" : `${user.username}'s Notes`}
+            </h2>
+            {isOwnProfile && (
+              <Button
+                onClick={() => setIsAddThoughtDialogOpen(true)}
+                className="rounded-full bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                <span className="hidden sm:inline">New Note</span>
+                <span className="sm:hidden">New</span>
+              </Button>
+            )}
+          </div>
+
+          {/* Character Usage - Only show for own profile */}
+          {isOwnProfile && (
+            <Card className="rounded-xl bg-card shadow-sm border border-blue-100">
+              <CardContent className="p-4">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between rounded-xl bg-background/50 p-3 border border-blue-50">
+                    <span>Character Usage</span>
+                    <div className="text-right">
+                      <span className="font-medium">{thoughtsCharCount}</span>
+                      <span className="text-muted-foreground"> / {MAX_TOTAL_CHARS}</span>
+                    </div>
+                  </div>
+                  <Progress value={usagePercentage} className="h-2 w-full bg-blue-100">
+                    <div className="h-full bg-blue-600" style={{ width: `${Math.min(100, usagePercentage)}%` }} />
+                  </Progress>
+                  <div className="text-xs text-muted-foreground text-right">{remainingChars} characters remaining</div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Notes Display */}
+          {thoughts.length === 0 ? (
+            <Card className="rounded-xl bg-card shadow-sm border border-blue-100">
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                  <span className="text-2xl">📝</span>
+                </div>
+                <h3 className="text-lg font-semibold text-blue-600 mb-2">
+                  {isOwnProfile ? "No notes yet" : "No notes shared"}
+                </h3>
+                <p className="text-muted-foreground text-center mb-4">
+                  {isOwnProfile
+                    ? "Begin building connections with your first note. Each reflection you add helps Mirro find patterns and insights that matter to you."
+                    : `${user.username} hasn't shared any notes yet.`}
+                </p>
+                {isOwnProfile && (
+                  <Button
+                    onClick={() => setIsAddThoughtDialogOpen(true)}
+                    className="rounded-full bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Your First Note
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {thoughts.map((thought) => (
+                <Card key={thought.id} className="rounded-xl bg-card shadow-sm border border-blue-100">
+                  <CardContent className="p-4 sm:p-6">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <h3 className="text-blue-600 font-semibold text-lg mb-1">{thought.title}</h3>
+                        <p className="text-sm text-gray-500">{formatDate(thought.createdAt)}</p>
+                      </div>
+                      {isOwnProfile && (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEditingThought(thought)
+                              setIsEditThoughtDialogOpen(true)
+                            }}
+                            className="rounded-full bg-background/50 border-blue-200"
+                          >
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDeleteThought(thought.id)}
+                            className="bg-red-100 hover:bg-red-200 text-red-600 rounded-full"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    <p className="whitespace-pre-line text-gray-800 leading-relaxed">{thought.content}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
       </Tabs>
+
+      {/* Edit Post Dialog */}
+      <Dialog open={isEditPostDialogOpen} onOpenChange={setIsEditPostDialogOpen}>
+        <DialogContent className="mx-4 sm:mx-auto sm:max-w-[500px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-blue-600">Edit Post</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <Textarea
+              value={editingPostContent}
+              onChange={(e) => setEditingPostContent(e.target.value)}
+              className="min-h-[120px] rounded-xl border-blue-200 resize-none"
+              placeholder="Edit your post..."
+            />
+
+            {/* Current Media */}
+            {editingPostMedia && !removeEditMedia && !newEditMedia && (
+              <div className="relative rounded-xl overflow-hidden">
+                {editingPostMediaType === "video" ? (
+                  <video src={editingPostMedia} className="w-full max-h-64 object-cover" controls />
+                ) : (
+                  <Image
+                    src={editingPostMedia || "/placeholder.svg"}
+                    alt="Current media"
+                    width={400}
+                    height={300}
+                    className="w-full max-h-64 object-cover"
+                  />
+                )}
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setRemoveEditMedia(true)}
+                  className="absolute top-2 right-2 rounded-full"
+                >
+                  Remove
+                </Button>
+              </div>
+            )}
+
+            {/* New Media Preview */}
+            {newEditMedia && (
+              <div className="relative rounded-xl overflow-hidden">
+                {newEditMedia.type.startsWith("video/") ? (
+                  <video src={URL.createObjectURL(newEditMedia)} className="w-full max-h-64 object-cover" controls />
+                ) : (
+                  <Image
+                    src={URL.createObjectURL(newEditMedia) || "/placeholder.svg"}
+                    alt="New media"
+                    width={400}
+                    height={300}
+                    className="w-full max-h-64 object-cover"
+                  />
+                )}
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setNewEditMedia(null)}
+                  className="absolute top-2 right-2 rounded-full"
+                >
+                  Remove
+                </Button>
+              </div>
+            )}
+
+            {/* Media Upload */}
+            {!newEditMedia && (removeEditMedia || !editingPostMedia) && (
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-full cursor-pointer transition-colors">
+                  <Paperclip className="h-4 w-4" />
+                  <span>Add Media</span>
+                  <input
+                    type="file"
+                    accept="image/*,video/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null
+                      setNewEditMedia(file)
+                      setRemoveEditMedia(false)
+                    }}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            )}
+
+            <div className="text-xs text-gray-400 text-right">{editingPostContent.length}/500</div>
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsEditPostDialogOpen(false)
+                setEditingPostId(null)
+                setEditingPostContent("")
+                setEditingPostMedia(null)
+                setEditingPostMediaType(null)
+                setNewEditMedia(null)
+                setRemoveEditMedia(false)
+              }}
+              className="rounded-full"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSavePostEdit}
+              disabled={!editingPostContent.trim() && !editingPostMedia && !newEditMedia}
+              className="rounded-full bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Thought Dialog */}
+      <Dialog open={isAddThoughtDialogOpen} onOpenChange={setIsAddThoughtDialogOpen}>
+        <DialogContent className="sm:max-w-[550px] rounded-xl bg-background/90 backdrop-blur-md border border-blue-200 w-[calc(100%-2rem)] mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-blue-600">Create New Note</DialogTitle>
+            <DialogDescription>
+              Add a new note to your collection. These notes help build meaningful connections.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="title">Title</Label>
+              <Input
+                id="title"
+                value={newThought.title}
+                onChange={(e) => setNewThought({ ...newThought, title: e.target.value })}
+                placeholder="Give your note a title"
+                className="rounded-full bg-background/50"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="content">Content</Label>
+              <Textarea
+                id="content"
+                value={newThought.content}
+                onChange={(e) => {
+                  const content = e.target.value.slice(0, MAX_THOUGHT_CHARS)
+                  setNewThought({ ...newThought, content })
+                }}
+                placeholder="Write your note here..."
+                className="min-h-[150px] rounded-xl bg-background/50"
+              />
+              <div className="flex flex-col sm:flex-row sm:justify-between text-xs text-muted-foreground">
+                <span className={newThought.content.length >= MAX_THOUGHT_CHARS ? "text-red-500" : ""}>
+                  {newThought.content.length}/{MAX_THOUGHT_CHARS} characters
+                </span>
+                <span className="mt-1 sm:mt-0">{remainingChars} characters remaining in total</span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsAddThoughtDialogOpen(false)}
+              className="rounded-full bg-background/50 w-full sm:w-auto"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddThought}
+              className="rounded-full bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
+              disabled={!newThought.title || !newThought.content || newThought.content.length > MAX_THOUGHT_CHARS}
+            >
+              Save Note
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Thought Dialog */}
+      <Dialog
+        open={isEditThoughtDialogOpen && editingThought !== null}
+        onOpenChange={(open) => {
+          setIsEditThoughtDialogOpen(open)
+          if (!open) setEditingThought(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-[550px] rounded-xl bg-background/90 backdrop-blur-md border border-blue-200 w-[calc(100%-2rem)] mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-blue-600">Edit Note</DialogTitle>
+          </DialogHeader>
+          {editingThought && (
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-title">Title</Label>
+                <Input
+                  id="edit-title"
+                  value={editingThought.title}
+                  onChange={(e) => setEditingThought({ ...editingThought, title: e.target.value })}
+                  className="rounded-full bg-background/50"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-content">Content</Label>
+                <Textarea
+                  id="edit-content"
+                  value={editingThought.content}
+                  onChange={(e) => {
+                    const content = e.target.value.slice(0, MAX_THOUGHT_CHARS)
+                    setEditingThought({ ...editingThought, content })
+                  }}
+                  className="min-h-[150px] rounded-xl bg-background/50"
+                />
+                <div className="flex flex-col sm:flex-row sm:justify-between text-xs text-muted-foreground">
+                  <span className={editingThought.content.length >= MAX_THOUGHT_CHARS ? "text-red-500" : ""}>
+                    {editingThought.content.length}/{MAX_THOUGHT_CHARS} characters
+                  </span>
+                  <span className="mt-1 sm:mt-0">
+                    {remainingChars +
+                      (thoughts.find((t) => t.id === editingThought.id)?.content.length || 0) -
+                      editingThought.content.length}{" "}
+                    characters remaining in total
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditingThought(null)
+                setIsEditThoughtDialogOpen(false)
+              }}
+              className="rounded-full bg-background/50 w-full sm:w-auto"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEditThought}
+              className="rounded-full bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
+              disabled={
+                !editingThought?.title || !editingThought?.content || editingThought?.content.length > MAX_THOUGHT_CHARS
+              }
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Comments Dialog */}
       <Dialog open={commentDialogOpen} onOpenChange={setCommentDialogOpen}>
@@ -1481,7 +1940,6 @@ export default function ProfilePage() {
             <DialogTitle className="text-blue-600">Comments</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col h-[60vh]">
-            {/* Comment Input */}
             <div className="p-4 border-b">
               <div className="flex gap-3">
                 <div className="relative h-8 w-8 overflow-hidden rounded-full flex-shrink-0">
@@ -1515,7 +1973,6 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Comments List */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {commentsLoading ? (
                 <div className="flex justify-center py-8">
@@ -1543,7 +2000,6 @@ export default function ProfilePage() {
                             {new Date(comment.createdAt).toLocaleDateString()}
                           </span>
                         </div>
-                        {/* Show delete button only for own comments */}
                         {comment.userId === session?.user?.id && (
                           <Button
                             variant="ghost"
@@ -1552,14 +2008,7 @@ export default function ProfilePage() {
                             className="h-6 w-6 rounded-full hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
                             title="Delete comment"
                           >
-                            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                              />
-                            </svg>
+                            <Trash2 className="h-3 w-3" />
                           </Button>
                         )}
                       </div>

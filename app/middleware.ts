@@ -32,7 +32,7 @@ export async function middleware(request: NextRequest) {
   
   // If has token and trying to access auth route, redirect to discover
   if (token && isAuthRoute) {
-    return NextResponse.redirect(new URL("/discover", request.url))
+    return NextResponse.redirect(new URL("/feed", request.url))
   }
   
   return NextResponse.next()

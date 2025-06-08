@@ -177,7 +177,7 @@ export default function TheMirrorPage() {
       <div className="flex items-center justify-center min-h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-          <p className="text-muted-foreground">Loading your thoughts...</p>
+          <p className="text-muted-foreground">Loading your notes...</p>
         </div>
       </div>
     )
@@ -188,21 +188,21 @@ export default function TheMirrorPage() {
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Lock className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
-          <h1 className="text-2xl sm:text-3xl font-bold text-blue-600">Thoughts</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-blue-600">Notepad</h1>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
             <Button className="rounded-full bg-blue-600 hover:bg-blue-700 text-white">
               <Plus className="mr-2 h-4 w-4" />
-              <span className="hidden sm:inline">New Thought</span>
+              <span className="hidden sm:inline">New Note</span>
               <span className="sm:hidden">New</span>
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[550px] rounded-xl bg-background/90 backdrop-blur-md border border-blue-200 w-[calc(100%-2rem)] mx-auto">
             <DialogHeader>
-              <DialogTitle className="text-blue-600">Create New Thought</DialogTitle>
+              <DialogTitle className="text-blue-600">Create New Note</DialogTitle>
               <DialogDescription>
-                Add a new thought to your mirror. These thoughts help Mirro generate connection recommendations.
+                Add a new note to your mirror. These notes help Mirro generate connection recommendations.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -250,7 +250,7 @@ export default function TheMirrorPage() {
                 className="rounded-full bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
                 disabled={!newThought.title || !newThought.content || newThought.content.length > MAX_THOUGHT_CHARS}
               >
-                Save Thought
+                Save Note
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -260,8 +260,8 @@ export default function TheMirrorPage() {
       <div className="mb-6">
         <Card className="rounded-xl bg-card shadow-sm border border-blue-100">
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-blue-600">Thoughts</CardTitle>
-            <CardDescription>Your thoughts help Mirro generate meaningful connections</CardDescription>
+            <CardTitle className="flex items-center gap-2 text-blue-600">Notes</CardTitle>
+            <CardDescription>Your notes help Mirro generate meaningful connections</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -285,16 +285,16 @@ export default function TheMirrorPage() {
         <Card className="rounded-xl bg-card shadow-sm border border-blue-100">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Lock className="h-12 w-12 text-blue-300 mb-4" />
-            <h3 className="text-lg font-semibold text-blue-600 mb-2">No thoughts yet</h3>
+            <h3 className="text-lg font-semibold text-blue-600 mb-2">No notes yet</h3>
             <p className="text-muted-foreground text-center mb-4">
-              Start building your inner world by adding your first thought. These reflections help create meaningful connections.
+              Begin building connections with your first note. Each reflection you add helps Mirro find patterns and insights that matter to you.
             </p>
             <Button
               onClick={() => setIsAddDialogOpen(true)}
               className="rounded-full bg-blue-600 hover:bg-blue-700 text-white"
             >
               <Plus className="mr-2 h-4 w-4" />
-              Add Your First Thought
+              Add Your First Note
             </Button>
           </CardContent>
         </Card>
@@ -334,7 +334,7 @@ export default function TheMirrorPage() {
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-[550px] rounded-xl bg-background/90 backdrop-blur-md border border-blue-200 w-[calc(100%-2rem)] mx-auto">
                     <DialogHeader>
-                      <DialogTitle className="text-blue-600">Edit Thought</DialogTitle>
+                      <DialogTitle className="text-blue-600">Edit Note</DialogTitle>
                     </DialogHeader>
                     {editingThought && (
                       <div className="grid gap-4 py-4">

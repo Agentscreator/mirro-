@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Search, Lock, User, MessageSquare, Settings } from "lucide-react"
+import { Home, Search, User, MessageSquare, Settings } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { cn } from "@/lib/utils"
 
@@ -11,16 +11,16 @@ export function Navigation() {
 
   const routes = [
     {
+      href: "/feed",
+      icon: Home,
+      label: "Feed",
+      active: pathname === "/feed",
+    },    
+    {
       href: "/discover",
       icon: Search,
       label: "Discover",
       active: pathname === "/discover",
-    },
-    {
-      href: "/inner-world",
-      icon: Lock,
-      label: "Thoughts",
-      active: pathname === "/inner-world",
     },
     {
       href: "/profile",

@@ -5,6 +5,134 @@ import { db } from "@/src/db"
 import { postsTable } from "@/src/db/schema"
 import { eq, and } from "drizzle-orm"
 import { postCommentsTable, postLikesTable } from "@/src/db/schema"
+import { put } from "@vercel/blob"
+
+async function uploadToStorage(options: {
+  buffer: Buffer
+  filename: string
+  mimetype: string
+  folder?: string
+}): Promise<string> {
+  const { buffer, filename, mimetype, folder = "post-media" } = options
+
+  const timestamp = Date.now()
+  const fileExtension = filename.split(".").pop()
+  const uniqueFilename = `${timestamp}-${Math.random().toString(36).substring(7)}.${fileExtension}`
+  const pathname = `${folder}/${uniqueFilename}`
+
+  const blob = await put(pathname, buffer, {
+    access: "public",
+    contentType: mimetype,
+  })
+
+  return blob.url
+}
+
+// PUT - Edit a post
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  try {
+    console.log("=== EDIT POST API DEBUG START ===")
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      console.error("Unauthorized: No session")
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const { id } = await context.params
+    const postId = Number.parseInt(id)
+
+    if (isNaN(postId)) {
+      console.error("Invalid post ID")
+      return NextResponse.json({ error: "Invalid post ID" }, { status: 400 })
+    }
+
+    // Check if post exists and belongs to the user
+    const post = await db
+      .select()
+      .from(postsTable)
+      .where(and(eq(postsTable.id, postId), eq(postsTable.userId, session.user.id)))
+      .limit(1)
+
+    if (post.length === 0) {
+      console.error("Post not found or not owned by user")
+      return NextResponse.json({ error: "Post not found or unauthorized" }, { status: 404 })
+    }
+
+    const formData = await request.formData()
+    const content = formData.get("content") as string
+    const media = formData.get("media") as File | null
+    const removeMedia = formData.get("removeMedia") === "true"
+
+    console.log("Edit data:", { content, hasMedia: !!media, removeMedia })
+
+    if (!content?.trim() && !media && !post[0].image && !post[0].video) {
+      console.error("No content or media provided")
+      return NextResponse.json({ error: "Content or media is required" }, { status: 400 })
+    }
+
+    const updateData: any = {
+      content: content?.trim() || "",
+      updatedAt: new Date(),
+    }
+
+    // Handle media updates
+    if (removeMedia) {
+      updateData.image = null
+      updateData.video = null
+    } else if (media) {
+      // Validate file type
+      if (!media.type.startsWith("image/") && !media.type.startsWith("video/")) {
+        return NextResponse.json({ error: "File must be an image or video" }, { status: 400 })
+      }
+
+      // Validate file size
+      const maxSize = media.type.startsWith("video/") ? 50 * 1024 * 1024 : 10 * 1024 * 1024
+      if (media.size > maxSize) {
+        return NextResponse.json(
+          {
+            error: `File too large (max ${media.type.startsWith("video/") ? "50MB for videos" : "10MB for images"})`,
+          },
+          { status: 400 },
+        )
+      }
+
+      try {
+        const bytes = await media.arrayBuffer()
+        const buffer = Buffer.from(bytes)
+        const mediaUrl = await uploadToStorage({
+          buffer,
+          filename: media.name,
+          mimetype: media.type,
+          folder: "post-media",
+        })
+
+        if (media.type.startsWith("video/")) {
+          updateData.video = mediaUrl
+          updateData.image = null
+        } else {
+          updateData.image = mediaUrl
+          updateData.video = null
+        }
+      } catch (uploadError) {
+        console.error("Media upload failed:", uploadError)
+        return NextResponse.json({ error: "Failed to upload media" }, { status: 500 })
+      }
+    }
+
+    // Update the post
+    const updatedPost = await db
+      .update(postsTable)
+      .set(updateData)
+      .where(and(eq(postsTable.id, postId), eq(postsTable.userId, session.user.id)))
+      .returning()
+
+    console.log("✅ Post updated successfully")
+    return NextResponse.json(updatedPost[0])
+  } catch (error) {
+    console.error("❌ Edit post error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
 
 // DELETE - Delete a post
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -41,26 +169,24 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     console.log("Post found, proceeding with deletion")
 
-    // First, delete all comments associated with this post
-    console.log("Deleting associated comments...")
-    const deletedComments = await db.delete(postCommentsTable).where(eq(postCommentsTable.postId, postId)).returning()
+    try {
+      // Delete associated comments and likes first
+      console.log("Deleting associated comments...")
+      await db.delete(postCommentsTable).where(eq(postCommentsTable.postId, postId))
 
-    console.log(`Deleted ${deletedComments.length} comments`)
+      console.log("Deleting associated likes...")
+      await db.delete(postLikesTable).where(eq(postLikesTable.postId, postId))
 
-    // Then, delete all likes associated with this post
-    console.log("Deleting associated likes...")
-    const deletedLikes = await db.delete(postLikesTable).where(eq(postLikesTable.postId, postId)).returning()
+      // Delete the post
+      console.log("Deleting the post...")
+      await db.delete(postsTable).where(and(eq(postsTable.id, postId), eq(postsTable.userId, session.user.id)))
 
-    console.log(`Deleted ${deletedLikes.length} likes`)
-
-    // Finally, delete the post
-    console.log("Deleting the post...")
-    await db.delete(postsTable).where(and(eq(postsTable.id, postId), eq(postsTable.userId, session.user.id)))
-
-    console.log("✅ Post deleted successfully")
-    console.log("=== DELETE POST API DEBUG END ===")
-
-    return NextResponse.json({ message: "Post deleted successfully" })
+      console.log("✅ Post deleted successfully")
+      return NextResponse.json({ message: "Post deleted successfully" })
+    } catch (dbError) {
+      console.error("❌ Database deletion error:", dbError)
+      return NextResponse.json({ error: "Failed to delete post from database" }, { status: 500 })
+    }
   } catch (error) {
     console.error("❌ Delete post error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

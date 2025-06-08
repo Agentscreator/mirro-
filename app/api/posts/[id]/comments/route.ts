@@ -18,8 +18,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const { id } = await context.params
     const postId = Number.parseInt(id)
 
-    console.log("Post ID:", postId)
-
     if (isNaN(postId)) {
       console.error("Invalid post ID")
       return NextResponse.json({ error: "Invalid post ID" }, { status: 400 })
@@ -33,7 +31,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       return NextResponse.json({ error: "Post not found" }, { status: 404 })
     }
 
-    // Fetch comments with user info
+    // Fetch comments with user info - Fixed to only select existing columns
     const comments = await db
       .select({
         id: postCommentsTable.id,
@@ -74,8 +72,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const { id } = await context.params
     const postId = Number.parseInt(id)
 
-    console.log("Post ID:", postId)
-
     if (isNaN(postId)) {
       console.error("Invalid post ID")
       return NextResponse.json({ error: "Invalid post ID" }, { status: 400 })
@@ -83,8 +79,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     const body = await request.json()
     const { content } = body
-
-    console.log("Comment content:", content)
 
     if (!content?.trim()) {
       console.error("No content provided")
@@ -99,7 +93,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json({ error: "Post not found" }, { status: 404 })
     }
 
-    console.log("Inserting comment into database...")
+    // Insert comment
     const comment = await db
       .insert(postCommentsTable)
       .values({
@@ -108,8 +102,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         content: content.trim(),
       })
       .returning()
-
-    console.log("Comment created successfully:", comment[0])
 
     // Fetch the comment with user info
     const commentWithUser = await db
@@ -137,10 +129,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   }
 }
 
-// DELETE - Delete a comment
-export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+// PUT - Edit a comment
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    console.log("=== DELETE COMMENT API DEBUG START ===")
+    console.log("=== EDIT COMMENT API DEBUG START ===")
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       console.error("Unauthorized: No session")
@@ -149,8 +141,6 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     const { id } = await context.params
     const postId = Number.parseInt(id)
-
-    console.log("Post ID:", postId)
 
     if (isNaN(postId)) {
       console.error("Invalid post ID")
@@ -171,7 +161,88 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       return NextResponse.json({ error: "Invalid comment ID" }, { status: 400 })
     }
 
-    console.log("Deleting comment ID:", commentIdNum)
+    const body = await request.json()
+    const { content } = body
+
+    if (!content?.trim()) {
+      console.error("No content provided")
+      return NextResponse.json({ error: "Content is required" }, { status: 400 })
+    }
+
+    // Update the comment - only set updatedAt if the column exists
+    const updatedComment = await db
+      .update(postCommentsTable)
+      .set({
+        content: content.trim(),
+        // Only include updatedAt if it exists in the schema
+        ...(postCommentsTable.updatedAt && { updatedAt: new Date() }),
+      })
+      .where(and(eq(postCommentsTable.id, commentIdNum), eq(postCommentsTable.userId, session.user.id)))
+      .returning()
+
+    if (updatedComment.length === 0) {
+      console.error("Comment not found or not owned by user")
+      return NextResponse.json({ error: "Comment not found or unauthorized" }, { status: 404 })
+    }
+
+    // Fetch the updated comment with user info
+    const commentWithUser = await db
+      .select({
+        id: postCommentsTable.id,
+        postId: postCommentsTable.postId,
+        userId: postCommentsTable.userId,
+        content: postCommentsTable.content,
+        createdAt: postCommentsTable.createdAt,
+        user: {
+          username: usersTable.username,
+          nickname: usersTable.nickname,
+          profileImage: usersTable.profileImage,
+        },
+      })
+      .from(postCommentsTable)
+      .leftJoin(usersTable, eq(postCommentsTable.userId, usersTable.id))
+      .where(eq(postCommentsTable.id, commentIdNum))
+      .limit(1)
+
+    console.log("✅ Comment updated successfully")
+    return NextResponse.json(commentWithUser[0])
+  } catch (error) {
+    console.error("❌ Edit comment error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
+// DELETE - Delete a comment
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  try {
+    console.log("=== DELETE COMMENT API DEBUG START ===")
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      console.error("Unauthorized: No session")
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const { id } = await context.params
+    const postId = Number.parseInt(id)
+
+    if (isNaN(postId)) {
+      console.error("Invalid post ID")
+      return NextResponse.json({ error: "Invalid post ID" }, { status: 400 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const commentId = searchParams.get("commentId")
+
+    if (!commentId) {
+      console.error("Comment ID is required")
+      return NextResponse.json({ error: "Comment ID is required" }, { status: 400 })
+    }
+
+    const commentIdNum = Number.parseInt(commentId)
+    if (isNaN(commentIdNum)) {
+      console.error("Invalid comment ID")
+      return NextResponse.json({ error: "Invalid comment ID" }, { status: 400 })
+    }
 
     // Check if comment exists and belongs to the user
     const comment = await db
@@ -184,8 +255,6 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       console.error("Comment not found or not owned by user")
       return NextResponse.json({ error: "Comment not found or unauthorized" }, { status: 404 })
     }
-
-    console.log("Comment found, proceeding with deletion")
 
     // Delete the comment
     await db.delete(postCommentsTable).where(eq(postCommentsTable.id, commentIdNum))

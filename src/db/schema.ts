@@ -70,12 +70,13 @@ export const thoughtsTable = pgTable("thoughts", {
   createdAt: timestamp().defaultNow().notNull(),
 });
 
-// Posts
+// Posts (updated with video support)
 export const postsTable = pgTable("posts", {
   id:        integer().primaryKey().generatedAlwaysAsIdentity(),
   userId:    uuid("userId").notNull().references(() => usersTable.id),
   content:   text().notNull(),
   image:     varchar("image", { length: 500 }),
+  video:     varchar("video", { length: 500 }), // Added video column
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -88,13 +89,15 @@ export const postLikesTable = pgTable("post_likes", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// Post Comments
+
+// Post Comments (with updatedAt added)
 export const postCommentsTable = pgTable("post_comments", {
   id:       integer().primaryKey().generatedAlwaysAsIdentity(),
   postId:   integer("post_id").notNull().references(() => postsTable.id),
   userId:   uuid("userId").notNull().references(() => usersTable.id),
   content:  text().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(), // Add this line
 });
 
 // Followers/Following
