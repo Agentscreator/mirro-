@@ -337,8 +337,8 @@ export default function SignupPage() {
         throw new Error("Failed to login after registration")
       }
 
-      // Redirect to discover page
-      router.push("/discover")
+      // Redirect to feed page
+      router.push("/feed")
       router.refresh()
     } catch (error) {
       console.error("Registration error:", error)

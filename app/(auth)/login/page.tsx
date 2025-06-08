@@ -53,7 +53,7 @@ export default function LoginPage() {
       if (result?.error) {
         setError("Invalid email/username or password")
       } else if (result?.ok) {
-        router.push("/discover")
+        router.push("/feed")
         router.refresh()
       }
     } catch (error) {

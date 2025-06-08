@@ -46,7 +46,7 @@ export function Navigation() {
     <>
       {/* Desktop navigation (side) */}
       <div className="fixed left-0 top-0 z-50 hidden h-screen w-16 border-r border-blue-100/50 bg-white/80 backdrop-blur-md md:flex md:flex-col md:items-center md:justify-between md:py-6">
-        <Link href="/discover" className="flex items-center justify-center">
+        <Link href="/feed" className="flex items-center justify-center">
           <Logo size="md" />
         </Link>
         <div className="flex flex-col items-center space-y-6">
