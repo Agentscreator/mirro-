@@ -1400,23 +1400,25 @@ export default function ProfilePage() {
 
       {/* Media Type Selection Dialog */}
       <Dialog open={isMediaTypeDialogOpen} onOpenChange={setIsMediaTypeDialogOpen}>
-        <DialogContent className="mx-4 sm:mx-auto sm:max-w-[400px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-center text-xl font-semibold text-blue-600">Create New Post</DialogTitle>
-            <DialogDescription className="text-center text-gray-600">Choose what you'd like to share</DialogDescription>
+        <DialogContent className="mx-4 sm:mx-auto sm:max-w-[400px] w-[calc(100%-2rem)] rounded-2xl">
+          <DialogHeader className="text-center">
+            <DialogTitle className="text-lg sm:text-xl font-semibold text-blue-600">Create New Post</DialogTitle>
+            <DialogDescription className="text-sm sm:text-base text-gray-600">
+              Choose what you'd like to share
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-6">
+          <div className="grid gap-3 sm:gap-4 py-4 sm:py-6">
             <Button
               onClick={() => handleMediaTypeSelect("image")}
               variant="outline"
-              className="h-20 rounded-xl border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 transition-all group"
+              className="h-16 sm:h-20 rounded-xl border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 transition-all group active:scale-95"
             >
-              <div className="flex flex-col items-center gap-2">
-                <div className="h-8 w-8 rounded-full bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
-                  <Camera className="h-5 w-5 text-blue-600" />
+              <div className="flex flex-col items-center gap-1 sm:gap-2">
+                <div className="h-6 w-6 sm:h-8 sm:w-8 rounded-full bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
+                  <Camera className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                 </div>
-                <span className="font-medium text-blue-600">Photo</span>
+                <span className="font-medium text-blue-600 text-sm sm:text-base">Photo</span>
                 <span className="text-xs text-gray-500">Share a photo</span>
               </div>
             </Button>
@@ -1424,20 +1426,24 @@ export default function ProfilePage() {
             <Button
               onClick={() => handleMediaTypeSelect("video")}
               variant="outline"
-              className="h-20 rounded-xl border-2 border-purple-200 hover:border-purple-400 hover:bg-purple-50 transition-all group"
+              className="h-16 sm:h-20 rounded-xl border-2 border-purple-200 hover:border-purple-400 hover:bg-purple-50 transition-all group active:scale-95"
             >
-              <div className="flex flex-col items-center gap-2">
-                <div className="h-8 w-8 rounded-full bg-purple-100 group-hover:bg-purple-200 flex items-center justify-center transition-colors">
-                  <Play className="h-5 w-5 text-purple-600" />
+              <div className="flex flex-col items-center gap-1 sm:gap-2">
+                <div className="h-6 w-6 sm:h-8 sm:w-8 rounded-full bg-purple-100 group-hover:bg-purple-200 flex items-center justify-center transition-colors">
+                  <Play className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600" />
                 </div>
-                <span className="font-medium text-purple-600">Video</span>
+                <span className="font-medium text-purple-600 text-sm sm:text-base">Video</span>
                 <span className="text-xs text-gray-500">Share a video</span>
               </div>
             </Button>
           </div>
 
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsMediaTypeDialogOpen(false)} className="w-full rounded-full">
+            <Button
+              variant="ghost"
+              onClick={() => setIsMediaTypeDialogOpen(false)}
+              className="w-full rounded-full text-sm sm:text-base py-2 sm:py-3"
+            >
               Cancel
             </Button>
           </DialogFooter>
@@ -1446,9 +1452,9 @@ export default function ProfilePage() {
 
       {/* Create Post Dialog */}
       <Dialog open={isCreatePostDialogOpen} onOpenChange={setIsCreatePostDialogOpen}>
-        <DialogContent className="mx-4 sm:mx-auto sm:max-w-[500px] rounded-2xl max-h-[90vh] overflow-hidden p-0">
+        <DialogContent className="mx-2 sm:mx-auto sm:max-w-[500px] w-[calc(100%-1rem)] sm:w-[95vw] rounded-2xl max-h-[95vh] overflow-hidden p-0">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b">
+          <div className="flex items-center justify-between p-3 sm:p-4 border-b bg-white">
             <Button
               variant="ghost"
               onClick={() => {
@@ -1458,27 +1464,33 @@ export default function ProfilePage() {
                 setPostContent("")
                 setIsCreatePostDialogOpen(false)
               }}
-              className="text-gray-600 hover:bg-gray-100 rounded-full px-3"
+              className="text-gray-600 hover:bg-gray-100 rounded-full px-3 text-sm sm:text-base"
             >
               Cancel
             </Button>
-            <h2 className="text-lg font-semibold">New Post</h2>
+            <h2 className="text-base sm:text-lg font-semibold">New Post</h2>
             <Button
               onClick={handleCreatePost}
               disabled={!selectedMedia}
-              className="rounded-full bg-blue-600 hover:bg-blue-700 text-white px-4 disabled:opacity-50"
+              className="rounded-full bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 disabled:opacity-50 text-sm sm:text-base"
             >
               Share
             </Button>
           </div>
 
-          <div className="max-h-[calc(90vh-80px)] overflow-y-auto">
+          <div className="max-h-[calc(95vh-60px)] overflow-y-auto">
             {/* Media Preview */}
             {mediaPreview && (
               <div className="relative bg-black">
-                <div className="aspect-square flex items-center justify-center">
+                <div className="aspect-square sm:aspect-video flex items-center justify-center">
                   {mediaType === "video" ? (
-                    <video src={mediaPreview} className="max-h-full max-w-full object-contain" controls muted />
+                    <video
+                      src={mediaPreview}
+                      className="max-h-full max-w-full object-contain"
+                      controls
+                      muted
+                      playsInline
+                    />
                   ) : (
                     <Image
                       src={mediaPreview || "/placeholder.svg"}
@@ -1491,7 +1503,7 @@ export default function ProfilePage() {
                 </div>
 
                 {/* Media controls overlay */}
-                <div className="absolute top-4 right-4 flex gap-2">
+                <div className="absolute top-2 sm:top-4 right-2 sm:right-4 flex gap-2">
                   <Button
                     size="sm"
                     variant="secondary"
@@ -1508,18 +1520,18 @@ export default function ProfilePage() {
                       }
                       input.click()
                     }}
-                    className="rounded-full bg-black/60 hover:bg-black/80 text-white border-none backdrop-blur-sm"
+                    className="rounded-full bg-black/60 hover:bg-black/80 text-white border-none backdrop-blur-sm h-8 w-8 sm:h-10 sm:w-10 p-0"
                   >
-                    <Edit className="h-4 w-4" />
+                    <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
                   </Button>
                 </div>
               </div>
             )}
 
             {/* Caption Section */}
-            <div className="p-4 space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="relative h-10 w-10 overflow-hidden rounded-full flex-shrink-0">
+            <div className="p-3 sm:p-4 space-y-3 sm:space-y-4">
+              <div className="flex items-start gap-2 sm:gap-3">
+                <div className="relative h-8 w-8 sm:h-10 sm:w-10 overflow-hidden rounded-full flex-shrink-0">
                   <Image
                     src={session?.user?.image || "/placeholder.svg?height=40&width=40"}
                     alt="Your avatar"
@@ -1528,35 +1540,43 @@ export default function ProfilePage() {
                     sizes="40px"
                   />
                 </div>
-                <div className="flex-1 space-y-3">
+                <div className="flex-1 space-y-2 sm:space-y-3">
                   <div>
-                    <p className="font-medium text-gray-900">{session?.user?.name || "You"}</p>
+                    <p className="font-medium text-gray-900 text-sm sm:text-base">{session?.user?.name || "You"}</p>
                     <Textarea
                       value={postContent}
                       onChange={(e) => setPostContent(e.target.value.slice(0, 2200))}
-                      className="mt-2 min-h-[100px] rounded-lg border-gray-200 resize-none text-sm placeholder:text-gray-400 focus:border-blue-400 focus:ring-blue-400"
+                      className="mt-2 min-h-[80px] sm:min-h-[100px] rounded-lg border-gray-200 resize-none text-sm sm:text-base placeholder:text-gray-400 focus:border-blue-400 focus:ring-blue-400"
                       placeholder="Write a caption..."
                     />
                     <div className="flex justify-between items-center mt-2">
                       <div className="text-xs text-gray-400">{postContent.length}/2,200 characters</div>
                       {postContent.length > 2000 && (
-                        <div className="text-xs text-orange-500">{2200 - postContent.length} characters remaining</div>
+                        <div className="text-xs text-orange-500">{2200 - postContent.length} remaining</div>
                       )}
                     </div>
                   </div>
 
                   {/* Post Options */}
-                  <div className="space-y-3 pt-2 border-t border-gray-100">
+                  <div className="space-y-2 sm:space-y-3 pt-2 border-t border-gray-100">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">Accessibility</span>
-                      <Button variant="ghost" size="sm" className="text-blue-600 hover:bg-blue-50 rounded-full">
+                      <span className="text-xs sm:text-sm font-medium text-gray-700">Accessibility</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-blue-600 hover:bg-blue-50 rounded-full text-xs sm:text-sm px-2 sm:px-3"
+                      >
                         Write alt text
                       </Button>
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">Advanced settings</span>
-                      <Button variant="ghost" size="sm" className="text-blue-600 hover:bg-blue-50 rounded-full">
+                      <span className="text-xs sm:text-sm font-medium text-gray-700">Advanced settings</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-blue-600 hover:bg-blue-50 rounded-full text-xs sm:text-sm px-2 sm:px-3"
+                      >
                         <span className="mr-1">⚙️</span>
                         Settings
                       </Button>
@@ -1571,24 +1591,24 @@ export default function ProfilePage() {
 
       {/* Post View Dialog */}
       <Dialog open={isPostViewOpen} onOpenChange={setIsPostViewOpen}>
-        <DialogContent className="max-w-4xl w-[95vw] h-[90vh] p-0 bg-black border-none">
+        <DialogContent className="max-w-4xl w-[95vw] h-[95vh] sm:h-[90vh] p-0 bg-black border-none">
           <DialogHeader className="sr-only">
             <DialogTitle>Post Details</DialogTitle>
           </DialogHeader>
           {selectedPost && (
-            <div className="flex h-full relative">
+            <div className="flex flex-col sm:flex-row h-full relative">
               {/* Close button - top right */}
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setIsPostViewOpen(false)}
-                className="absolute top-4 right-4 z-50 h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 text-white border-none"
+                className="absolute top-2 right-2 sm:top-4 sm:right-4 z-50 h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-black/60 hover:bg-black/80 text-white border-none backdrop-blur-sm"
               >
                 <X className="h-4 w-4" />
               </Button>
 
-              {/* Media Side with blurred background */}
-              <div className="flex-1 relative overflow-hidden">
+              {/* Media Section */}
+              <div className="flex-1 relative overflow-hidden h-[60vh] sm:h-full">
                 {/* Blurred background */}
                 {(selectedPost.image || selectedPost.video) && (
                   <div className="absolute inset-0">
@@ -1610,14 +1630,15 @@ export default function ProfilePage() {
                 )}
 
                 {/* Main content */}
-                <div className="relative z-10 flex items-center justify-center h-full p-4">
+                <div className="relative z-10 flex items-center justify-center h-full p-2 sm:p-4">
                   {selectedPost.video ? (
                     <video
                       src={selectedPost.video}
-                      className="max-h-full max-w-full object-contain"
+                      className="max-h-full max-w-full object-contain rounded-lg"
                       controls
                       autoPlay
                       loop
+                      playsInline
                     />
                   ) : selectedPost.image ? (
                     <Image
@@ -1625,21 +1646,21 @@ export default function ProfilePage() {
                       alt="Post content"
                       width={800}
                       height={600}
-                      className="max-h-full max-w-full object-contain"
+                      className="max-h-full max-w-full object-contain rounded-lg"
                     />
                   ) : (
-                    <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg p-8 max-w-md">
-                      <p className="text-white text-xl font-medium text-center">{selectedPost.content}</p>
+                    <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg p-4 sm:p-8 max-w-md mx-4">
+                      <p className="text-white text-lg sm:text-xl font-medium text-center">{selectedPost.content}</p>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Comments Side */}
-              <div className="w-96 bg-white flex flex-col">
+              {/* Comments Section */}
+              <div className="w-full sm:w-96 bg-white flex flex-col h-[40vh] sm:h-full">
                 {/* Header */}
-                <div className="p-4 border-b flex items-center gap-3">
-                  <div className="relative h-10 w-10 overflow-hidden rounded-full">
+                <div className="p-3 sm:p-4 border-b flex items-center gap-3 flex-shrink-0">
+                  <div className="relative h-8 w-8 sm:h-10 sm:w-10 overflow-hidden rounded-full">
                     <Image
                       src={user.profileImage || user.image || "/placeholder.svg?height=40&width=40"}
                       alt={user.username}
@@ -1648,40 +1669,40 @@ export default function ProfilePage() {
                       sizes="40px"
                     />
                   </div>
-                  <div className="flex-1">
-                    <p className="font-semibold">{user.nickname || user.username}</p>
-                    <p className="text-sm text-gray-500">{formatDate(selectedPost.createdAt)}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm sm:text-base truncate">{user.nickname || user.username}</p>
+                    <p className="text-xs sm:text-sm text-gray-500">{formatDate(selectedPost.createdAt)}</p>
                   </div>
                 </div>
 
                 {/* Content */}
                 {(selectedPost.image || selectedPost.video) && selectedPost.content && (
-                  <div className="p-4 border-b">
-                    <p className="text-gray-800">{selectedPost.content}</p>
+                  <div className="p-3 sm:p-4 border-b flex-shrink-0">
+                    <p className="text-gray-800 text-sm sm:text-base leading-relaxed">{selectedPost.content}</p>
                   </div>
                 )}
 
                 {/* Actions */}
-                <div className="p-4 border-b flex items-center justify-between">
-                  <div className="flex items-center gap-4">
+                <div className="p-3 sm:p-4 border-b flex items-center justify-between flex-shrink-0">
+                  <div className="flex items-center gap-3 sm:gap-4">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleLikePost(selectedPost.id)}
                       className={cn(
-                        "flex items-center gap-2 rounded-full transition-colors px-3 py-1",
+                        "flex items-center gap-2 rounded-full transition-colors px-2 sm:px-3 py-1 min-w-0",
                         selectedPost.isLiked ? "text-red-600 hover:bg-red-50" : "hover:bg-red-50 hover:text-red-600",
                       )}
                     >
-                      <Heart className={cn("h-5 w-5", selectedPost.isLiked && "fill-current")} />
-                      <span className="font-medium">{selectedPost.likes}</span>
+                      <Heart className={cn("h-5 w-5 flex-shrink-0", selectedPost.isLiked && "fill-current")} />
+                      <span className="font-medium text-sm">{selectedPost.likes}</span>
                     </Button>
                     <div className="flex items-center gap-2 text-gray-600">
-                      <MessageCircle className="h-5 w-5" />
-                      <span className="font-medium">{selectedPost.comments}</span>
+                      <MessageCircle className="h-5 w-5 flex-shrink-0" />
+                      <span className="font-medium text-sm">{selectedPost.comments}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 sm:gap-2">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -1689,7 +1710,7 @@ export default function ProfilePage() {
                       className="rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors p-2"
                       title="Share post"
                     >
-                      <Share2 className="h-5 w-5" />
+                      <Share2 className="h-4 w-4 sm:h-5 sm:w-5" />
                     </Button>
                     {isOwnProfile && (
                       <Button
@@ -1699,22 +1720,22 @@ export default function ProfilePage() {
                         className="rounded-full hover:bg-red-50 hover:text-red-600 p-2"
                         title="Delete post"
                       >
-                        <Trash2 className="h-5 w-5" />
+                        <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" />
                       </Button>
                     )}
                   </div>
                 </div>
 
                 {/* Comments */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 min-h-0">
                   {commentsLoading ? (
                     <div className="flex justify-center py-8">
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                     </div>
                   ) : comments.length > 0 ? (
                     comments.map((comment) => (
-                      <div key={comment.id} className="flex gap-3 group">
-                        <div className="relative h-8 w-8 overflow-hidden rounded-full flex-shrink-0">
+                      <div key={comment.id} className="flex gap-2 sm:gap-3 group">
+                        <div className="relative h-6 w-6 sm:h-8 sm:w-8 overflow-hidden rounded-full flex-shrink-0">
                           <Image
                             src={comment.user?.profileImage || "/placeholder.svg?height=32&width=32"}
                             alt={comment.user?.username || "User"}
@@ -1723,43 +1744,47 @@ export default function ProfilePage() {
                             sizes="32px"
                           />
                         </div>
-                        <div className="flex-1 space-y-1">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">
+                        <div className="flex-1 space-y-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 min-w-0">
+                              <span className="font-medium text-xs sm:text-sm truncate">
                                 {comment.user?.nickname || comment.user?.username}
                               </span>
-                              <span className="text-xs text-gray-500">{formatDate(comment.createdAt)}</span>
+                              <span className="text-xs text-gray-500 flex-shrink-0">
+                                {formatDate(comment.createdAt)}
+                              </span>
                             </div>
                             {comment.userId === session?.user?.id && (
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleDeleteComment(comment.id)}
-                                className="h-6 w-6 rounded-full hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="h-6 w-6 rounded-full hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                                 title="Delete comment"
                               >
                                 <Trash2 className="h-3 w-3" />
                               </Button>
                             )}
                           </div>
-                          <p className="text-sm text-gray-800">{comment.content}</p>
+                          <p className="text-xs sm:text-sm text-gray-800 leading-relaxed break-words">
+                            {comment.content}
+                          </p>
                         </div>
                       </div>
                     ))
                   ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <MessageCircle className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                      <p className="text-sm">No comments yet</p>
+                    <div className="text-center py-6 sm:py-8 text-gray-500">
+                      <MessageCircle className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-2 text-gray-300" />
+                      <p className="text-xs sm:text-sm">No comments yet</p>
                       <p className="text-xs text-gray-400">Be the first to comment!</p>
                     </div>
                   )}
                 </div>
 
                 {/* Comment Input */}
-                <div className="p-4 border-t">
-                  <div className="flex gap-3">
-                    <div className="relative h-8 w-8 overflow-hidden rounded-full flex-shrink-0">
+                <div className="p-3 sm:p-4 border-t flex-shrink-0 bg-white">
+                  <div className="flex gap-2 sm:gap-3">
+                    <div className="relative h-6 w-6 sm:h-8 sm:w-8 overflow-hidden rounded-full flex-shrink-0">
                       <Image
                         src={session?.user?.image || "/placeholder.svg?height=32&width=32"}
                         alt="Your avatar"
@@ -1773,14 +1798,14 @@ export default function ProfilePage() {
                         placeholder="Write a comment..."
                         value={newComment}
                         onChange={(e) => setNewComment(e.target.value)}
-                        className="min-h-[60px] rounded-lg border-blue-200 resize-none text-sm"
+                        className="min-h-[40px] sm:min-h-[60px] rounded-lg border-blue-200 resize-none text-xs sm:text-sm"
                       />
                       <div className="flex justify-end">
                         <Button
                           onClick={handleSubmitComment}
                           disabled={!newComment.trim()}
                           size="sm"
-                          className="rounded-full bg-blue-600 hover:bg-blue-700 text-white px-4"
+                          className="rounded-full bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 text-xs sm:text-sm"
                         >
                           <Send className="h-3 w-3 mr-1" />
                           Comment
