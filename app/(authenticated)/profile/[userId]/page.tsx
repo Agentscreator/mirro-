@@ -11,7 +11,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Progress } from "@/components/ui/progress"
 import {
   Edit,
   Send,
@@ -23,11 +22,10 @@ import {
   Camera,
   Check,
   Eye,
-  Paperclip,
   Plus,
   Trash2,
-  Grid3X3,
-  List,
+  X,
+  Play,
 } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { cn } from "@/lib/utils"
@@ -85,6 +83,19 @@ interface Thought {
   user?: {
     username: string
     nickname?: string
+    profileImage?: string
+  }
+}
+
+interface Comment {
+  id: number
+  content: string
+  createdAt: string
+  userId: string
+  user: {
+    username: string
+    nickname?: string
+    profileImage?: string
   }
 }
 
@@ -104,15 +115,26 @@ export default function ProfilePage() {
   const [postsLoading, setPostsLoading] = useState(false)
   const [thoughtsLoading, setThoughtsLoading] = useState(false)
   const [profileImageUploading, setProfileImageUploading] = useState(false)
-  const [newPost, setNewPost] = useState("")
   const [isEditingAbout, setIsEditingAbout] = useState(false)
   const [editedAbout, setEditedAbout] = useState("")
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [isFollowersDialogOpen, setIsFollowersDialogOpen] = useState(false)
   const [isFollowingDialogOpen, setIsFollowingDialogOpen] = useState(false)
   const [isFollowing, setIsFollowing] = useState(false)
-  const [postsViewMode, setPostsViewMode] = useState<"grid" | "list">("grid")
+
+  // Post creation states
+  const [isCreatePostDialogOpen, setIsCreatePostDialogOpen] = useState(false)
+  const [selectedMedia, setSelectedMedia] = useState<File | null>(null)
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null)
+  const [mediaType, setMediaType] = useState<"image" | "video" | null>(null)
+  const [postContent, setPostContent] = useState("")
+  const [isMediaTypeDialogOpen, setIsMediaTypeDialogOpen] = useState(false)
+
+  // Post viewing states
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null)
+  const [isPostViewOpen, setIsPostViewOpen] = useState(false)
+  const [comments, setComments] = useState<Comment[]>([])
+  const [newComment, setNewComment] = useState("")
+  const [commentsLoading, setCommentsLoading] = useState(false)
 
   // Post editing states
   const [editingPostId, setEditingPostId] = useState<number | null>(null)
@@ -122,13 +144,6 @@ export default function ProfilePage() {
   const [newEditMedia, setNewEditMedia] = useState<File | null>(null)
   const [removeEditMedia, setRemoveEditMedia] = useState(false)
   const [isEditPostDialogOpen, setIsEditPostDialogOpen] = useState(false)
-
-  // Comment states
-  const [commentDialogOpen, setCommentDialogOpen] = useState(false)
-  const [selectedPostId, setSelectedPostId] = useState<number | null>(null)
-  const [comments, setComments] = useState<any[]>([])
-  const [newComment, setNewComment] = useState("")
-  const [commentsLoading, setCommentsLoading] = useState(false)
 
   // Thoughts/Notes states
   const [newThought, setNewThought] = useState({
@@ -243,6 +258,24 @@ export default function ProfilePage() {
     }
   }
 
+  const fetchComments = async (postId: number) => {
+    try {
+      setCommentsLoading(true)
+      const response = await fetch(`/api/posts/${postId}/comments`)
+      if (response.ok) {
+        const data = await response.json()
+        setComments(data.comments || [])
+      } else {
+        setComments([])
+      }
+    } catch (error) {
+      console.error("Error fetching comments:", error)
+      setComments([])
+    } finally {
+      setCommentsLoading(false)
+    }
+  }
+
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -290,45 +323,80 @@ export default function ProfilePage() {
     }
   }, [userId, session, isOwnProfile, fetchPosts, fetchThoughts])
 
-  // Post editing functions
-  const handleEditPost = (post: Post) => {
-    setEditingPostId(post.id)
-    setEditingPostContent(post.content)
-    setEditingPostMedia(post.image || post.video || null)
-    setEditingPostMediaType(post.image ? "image" : post.video ? "video" : null)
-    setIsEditPostDialogOpen(true)
+  // Media handling for post creation
+  const handleMediaTypeSelect = (type: "image" | "video") => {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = type === "image" ? "image/*" : "video/*"
+    input.onchange = (event) => {
+      const syntheticEvent = {
+        target: event.target,
+        currentTarget: event.target,
+      } as React.ChangeEvent<HTMLInputElement>
+      handleMediaSelect(syntheticEvent)
+    }
+    input.click()
+    setIsMediaTypeDialogOpen(false)
   }
 
-  const handleSavePostEdit = async () => {
-    if (!editingPostId || (!editingPostContent.trim() && !editingPostMedia && !newEditMedia)) return
+  const handleMediaSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+      toast({
+        title: "Error",
+        description: "Please select an image or video file.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate file size
+    const maxSize = file.type.startsWith("video/") ? 50 * 1024 * 1024 : 10 * 1024 * 1024
+    if (file.size > maxSize) {
+      toast({
+        title: "Error",
+        description: `File too large. Max size: ${file.type.startsWith("video/") ? "50MB for videos" : "10MB for images"}`,
+        variant: "destructive",
+      })
+      return
+    }
+
+    setSelectedMedia(file)
+    setMediaType(file.type.startsWith("video/") ? "video" : "image")
+
+    // Create preview
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setMediaPreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+
+    setIsCreatePostDialogOpen(true)
+  }
+
+  const handleCreatePost = async () => {
+    if (!selectedMedia && !postContent.trim()) return
 
     try {
       const formData = new FormData()
-      formData.append("content", editingPostContent.trim())
-
-      if (removeEditMedia) {
-        formData.append("removeMedia", "true")
-      } else if (newEditMedia) {
-        formData.append("media", newEditMedia)
+      formData.append("content", postContent.trim())
+      if (selectedMedia) {
+        formData.append("media", selectedMedia)
       }
 
-      const response = await fetch(`/api/posts/${editingPostId}`, {
-        method: "PUT",
+      const response = await fetch("/api/posts", {
+        method: "POST",
         body: formData,
       })
 
       if (response.ok) {
-        const updatedPost = await response.json()
-        const updatedPosts = posts.map((post) =>
-          post.id === editingPostId
-            ? {
-                ...post,
-                content: updatedPost.content,
-                image: updatedPost.image,
-                video: updatedPost.video,
-              }
-            : post,
-        )
+        const newPostData = await response.json()
+        sessionStorage.removeItem(cacheKey)
+
+        const updatedPosts = [newPostData, ...posts]
         setPosts(updatedPosts)
 
         sessionStorage.setItem(
@@ -339,186 +407,79 @@ export default function ProfilePage() {
           }),
         )
 
-        setIsEditPostDialogOpen(false)
-        setEditingPostId(null)
-        setEditingPostContent("")
-        setEditingPostMedia(null)
-        setEditingPostMediaType(null)
-        setNewEditMedia(null)
-        setRemoveEditMedia(false)
+        // Reset form
+        setSelectedMedia(null)
+        setMediaPreview(null)
+        setMediaType(null)
+        setPostContent("")
+        setIsCreatePostDialogOpen(false)
 
         toast({
           title: "Success",
-          description: "Post updated successfully!",
+          description: "Post created successfully!",
         })
       } else {
-        throw new Error("Failed to update post")
+        throw new Error("Failed to create post")
       }
-    } catch (error) {
-      console.error("Error updating post:", error)
+    } catch (error: any) {
+      console.error("Error creating post:", error)
       toast({
         title: "Error",
-        description: "Failed to update post. Please try again.",
+        description: "Failed to create post. Please try again.",
         variant: "destructive",
       })
     }
   }
 
-  // Thoughts functions
-  const thoughtsCharCount = thoughts.reduce((acc, t) => acc + t.content.length, 0)
-  const remainingChars = MAX_TOTAL_CHARS - thoughtsCharCount
-  const usagePercentage = (thoughtsCharCount / MAX_TOTAL_CHARS) * 100
+  const handlePostClick = async (post: Post) => {
+    setSelectedPost(post)
+    setIsPostViewOpen(true)
+    await fetchComments(post.id)
+  }
 
-  const handleAddThought = async () => {
-    if (!newThought.title || !newThought.content) return
-
-    if (newThought.content.length > remainingChars) {
-      toast({
-        title: "Error",
-        description: `You only have ${remainingChars} characters remaining. This note is too long.`,
-        variant: "destructive",
-      })
-      return
-    }
-
+  const handleLikePost = async (postId: number) => {
     try {
-      const response = await fetch("/api/thoughts", {
+      const response = await fetch(`/api/posts/${postId}/like`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: newThought.title,
-          content: newThought.content,
-        }),
       })
 
       if (response.ok) {
-        const savedThought = await response.json()
-        setThoughts([savedThought, ...thoughts])
-        setNewThought({ title: "", content: "" })
-        setIsAddThoughtDialogOpen(false)
+        const updatedPost = await response.json()
+        const updatedPosts = posts.map((post) =>
+          post.id === postId ? { ...post, likes: updatedPost.likes, isLiked: updatedPost.isLiked } : post,
+        )
+        setPosts(updatedPosts)
 
-        toast({
-          title: "Success",
-          description: "Note saved successfully!",
-        })
+        // Update selected post if it's the same
+        if (selectedPost?.id === postId) {
+          setSelectedPost((prev) => (prev ? { ...prev, likes: updatedPost.likes, isLiked: updatedPost.isLiked } : null))
+        }
+
+        sessionStorage.setItem(
+          cacheKey,
+          JSON.stringify({
+            data: updatedPosts,
+            timestamp: Date.now(),
+          }),
+        )
       } else {
-        throw new Error("Failed to save note")
+        throw new Error("Failed to like post")
       }
     } catch (error) {
-      console.error("Error saving thought:", error)
+      console.error("Error liking post:", error)
       toast({
         title: "Error",
-        description: "Failed to save note. Please try again.",
+        description: "Failed to like post. Please try again.",
         variant: "destructive",
       })
-    }
-  }
-
-  const handleEditThought = async () => {
-    if (!editingThought || !editingThought.title || !editingThought.content) return
-
-    const originalThought = thoughts.find((t) => t.id === editingThought.id)
-    const charDifference = editingThought.content.length - (originalThought?.content.length || 0)
-
-    if (charDifference > 0 && charDifference > remainingChars) {
-      toast({
-        title: "Error",
-        description: `You only have ${remainingChars} characters remaining. This edit adds too many characters.`,
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      const response = await fetch(`/api/thoughts/${editingThought.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: editingThought.title,
-          content: editingThought.content,
-        }),
-      })
-
-      if (response.ok) {
-        const updatedThought = await response.json()
-        setThoughts(thoughts.map((t) => (t.id === editingThought.id ? updatedThought : t)))
-        setEditingThought(null)
-        setIsEditThoughtDialogOpen(false)
-
-        toast({
-          title: "Success",
-          description: "Note updated successfully!",
-        })
-      } else {
-        throw new Error("Failed to update note")
-      }
-    } catch (error) {
-      console.error("Error updating thought:", error)
-      toast({
-        title: "Error",
-        description: "Failed to update note. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleDeleteThought = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this note?")) return
-
-    try {
-      const response = await fetch(`/api/thoughts/${id}`, {
-        method: "DELETE",
-      })
-
-      if (response.ok) {
-        setThoughts(thoughts.filter((t) => t.id !== id))
-        toast({
-          title: "Success",
-          description: "Note deleted successfully!",
-        })
-      } else {
-        throw new Error("Failed to delete note")
-      }
-    } catch (error) {
-      console.error("Error deleting thought:", error)
-      toast({
-        title: "Error",
-        description: "Failed to delete note. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  // Comment functions
-  const handleOpenComments = async (postId: number) => {
-    setSelectedPostId(postId)
-    setCommentDialogOpen(true)
-    await fetchComments(postId)
-  }
-
-  const fetchComments = async (postId: number) => {
-    try {
-      setCommentsLoading(true)
-      const response = await fetch(`/api/posts/${postId}/comments`)
-      if (response.ok) {
-        const data = await response.json()
-        setComments(data.comments || [])
-      } else {
-        setComments([])
-      }
-    } catch (error) {
-      console.error("Error fetching comments:", error)
-      setComments([])
-    } finally {
-      setCommentsLoading(false)
     }
   }
 
   const handleSubmitComment = async () => {
-    if (!newComment.trim() || !selectedPostId) return
+    if (!newComment.trim() || !selectedPost) return
 
     try {
-      const response = await fetch(`/api/posts/${selectedPostId}/comments`, {
+      const response = await fetch(`/api/posts/${selectedPost.id}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: newComment.trim() }),
@@ -529,10 +490,15 @@ export default function ProfilePage() {
         setComments([newCommentData, ...comments])
         setNewComment("")
 
+        // Update comment count
         const updatedPosts = posts.map((post) =>
-          post.id === selectedPostId ? { ...post, comments: post.comments + 1 } : post,
+          post.id === selectedPost.id ? { ...post, comments: post.comments + 1 } : post,
         )
         setPosts(updatedPosts)
+
+        if (selectedPost) {
+          setSelectedPost({ ...selectedPost, comments: selectedPost.comments + 1 })
+        }
 
         toast({
           title: "Success",
@@ -555,7 +521,7 @@ export default function ProfilePage() {
     if (!confirm("Are you sure you want to delete this comment?")) return
 
     try {
-      const response = await fetch(`/api/posts/${selectedPostId}/comments?commentId=${commentId}`, {
+      const response = await fetch(`/api/posts/${selectedPost?.id}/comments?commentId=${commentId}`, {
         method: "DELETE",
       })
 
@@ -564,9 +530,13 @@ export default function ProfilePage() {
         setComments(updatedComments)
 
         const updatedPosts = posts.map((post) =>
-          post.id === selectedPostId ? { ...post, comments: Math.max(0, post.comments - 1) } : post,
+          post.id === selectedPost?.id ? { ...post, comments: Math.max(0, post.comments - 1) } : post,
         )
         setPosts(updatedPosts)
+
+        if (selectedPost) {
+          setSelectedPost({ ...selectedPost, comments: Math.max(0, selectedPost.comments - 1) })
+        }
 
         toast({
           title: "Success",
@@ -585,7 +555,6 @@ export default function ProfilePage() {
     }
   }
 
-  // Other existing functions (handleDeletePost, handleSharePost, etc.) remain the same...
   const handleDeletePost = async (postId: number) => {
     if (!confirm("Are you sure you want to delete this post?")) {
       return
@@ -612,6 +581,12 @@ export default function ProfilePage() {
             timestamp: Date.now(),
           }),
         )
+
+        // Close post view if it's the deleted post
+        if (selectedPost?.id === postId) {
+          setIsPostViewOpen(false)
+          setSelectedPost(null)
+        }
 
         toast({
           title: "Success",
@@ -668,101 +643,6 @@ export default function ProfilePage() {
         title: "Error",
         description: "Failed to share post. Please try again.",
       })
-    }
-  }
-
-  const handlePostSubmit = async () => {
-    if (!newPost.trim() && !imagePreview) return
-
-    try {
-      const formData = new FormData()
-      formData.append("content", newPost)
-      if (imageFile) {
-        formData.append("media", imageFile)
-      }
-
-      const response = await fetch("/api/posts", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (response.ok) {
-        const newPostData = await response.json()
-        sessionStorage.removeItem(cacheKey)
-
-        const updatedPosts = [newPostData, ...posts]
-        setPosts(updatedPosts)
-
-        sessionStorage.setItem(
-          cacheKey,
-          JSON.stringify({
-            data: updatedPosts,
-            timestamp: Date.now(),
-          }),
-        )
-
-        setNewPost("")
-        setImageFile(null)
-        setImagePreview(null)
-
-        toast({
-          title: "Success",
-          description: "Post created successfully!",
-        })
-      } else {
-        throw new Error("Failed to create post")
-      }
-    } catch (error: any) {
-      console.error("Error creating post:", error)
-      toast({
-        title: "Error",
-        description: "Failed to create post. Please try again.",
-      })
-    }
-  }
-
-  const handleLikePost = async (postId: number) => {
-    try {
-      const response = await fetch(`/api/posts/${postId}/like`, {
-        method: "POST",
-      })
-
-      if (response.ok) {
-        const updatedPost = await response.json()
-        const updatedPosts = posts.map((post) =>
-          post.id === postId ? { ...post, likes: updatedPost.likes, isLiked: updatedPost.isLiked } : post,
-        )
-        setPosts(updatedPosts)
-
-        sessionStorage.setItem(
-          cacheKey,
-          JSON.stringify({
-            data: updatedPosts,
-            timestamp: Date.now(),
-          }),
-        )
-      } else {
-        throw new Error("Failed to like post")
-      }
-    } catch (error) {
-      console.error("Error liking post:", error)
-      toast({
-        title: "Error",
-        description: "Failed to like post. Please try again.",
-      })
-    }
-  }
-
-  const handleMediaChange = (file: File | null) => {
-    setImageFile(file)
-    if (file) {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
-    } else {
-      setImagePreview(null)
     }
   }
 
@@ -933,6 +813,131 @@ export default function ProfilePage() {
     }
   }
 
+  // Thoughts functions
+  const thoughtsCharCount = thoughts.reduce((acc, t) => acc + t.content.length, 0)
+  const remainingChars = MAX_TOTAL_CHARS - thoughtsCharCount
+  const usagePercentage = (thoughtsCharCount / MAX_TOTAL_CHARS) * 100
+
+  const handleAddThought = async () => {
+    if (!newThought.title || !newThought.content) return
+
+    if (newThought.content.length > remainingChars) {
+      toast({
+        title: "Error",
+        description: `You only have ${remainingChars} characters remaining. This note is too long.`,
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const response = await fetch("/api/thoughts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newThought.title,
+          content: newThought.content,
+        }),
+      })
+
+      if (response.ok) {
+        const savedThought = await response.json()
+        setThoughts([savedThought, ...thoughts])
+        setNewThought({ title: "", content: "" })
+        setIsAddThoughtDialogOpen(false)
+
+        toast({
+          title: "Success",
+          description: "Thought saved successfully!",
+        })
+      } else {
+        throw new Error("Failed to save thought")
+      }
+    } catch (error) {
+      console.error("Error saving thought:", error)
+      toast({
+        title: "Error",
+        description: "Failed to save thought. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleEditThought = async () => {
+    if (!editingThought || !editingThought.title || !editingThought.content) return
+
+    const originalThought = thoughts.find((t) => t.id === editingThought.id)
+    const charDifference = editingThought.content.length - (originalThought?.content.length || 0)
+
+    if (charDifference > 0 && charDifference > remainingChars) {
+      toast({
+        title: "Error",
+        description: `You only have ${remainingChars} characters remaining. This edit adds too many characters.`,
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/thoughts/${editingThought.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: editingThought.title,
+          content: editingThought.content,
+        }),
+      })
+
+      if (response.ok) {
+        const updatedThought = await response.json()
+        setThoughts(thoughts.map((t) => (t.id === editingThought.id ? updatedThought : t)))
+        setEditingThought(null)
+        setIsEditThoughtDialogOpen(false)
+
+        toast({
+          title: "Success",
+          description: "Thought updated successfully!",
+        })
+      } else {
+        throw new Error("Failed to update thought")
+      }
+    } catch (error) {
+      console.error("Error updating thought:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update thought. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeleteThought = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this thought?")) return
+
+    try {
+      const response = await fetch(`/api/thoughts/${id}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        setThoughts(thoughts.filter((t) => t.id !== id))
+        toast({
+          title: "Success",
+          description: "Thought deleted successfully!",
+        })
+      } else {
+        throw new Error("Failed to delete thought")
+      }
+    } catch (error) {
+      console.error("Error deleting thought:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete thought. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
@@ -959,7 +964,7 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-      {/* Profile Header - Same as before */}
+      {/* Profile Header */}
       <div className="relative mb-6">
         <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-white to-blue-50 rounded-2xl sm:rounded-3xl"></div>
         <div className="relative p-4 sm:p-6 lg:p-8">
@@ -1204,7 +1209,7 @@ export default function ProfilePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Enhanced Tabs with Posts and Notes - REMOVED COUNTS */}
+      {/* Enhanced Tabs with Posts and Notes */}
       <Tabs defaultValue="posts" className="w-full">
         <TabsList className="grid w-full grid-cols-2 rounded-xl sm:rounded-2xl bg-blue-50 p-1 mb-6">
           <TabsTrigger
@@ -1218,7 +1223,7 @@ export default function ProfilePage() {
             value="notes"
             className="rounded-lg sm:rounded-xl data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm font-medium text-sm sm:text-base py-2"
           >
-            Notes
+            Thoughts
             {thoughtsLoading && (
               <div className="ml-2 animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
             )}
@@ -1228,346 +1233,64 @@ export default function ProfilePage() {
         {/* Posts Tab */}
         <TabsContent value="posts" className="space-y-4 sm:space-y-6">
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="text-lg font-semibold text-blue-600">
               {isOwnProfile ? "Your Posts" : `${user.username}'s Posts`}
             </h2>
-            <div className="flex items-center gap-2">
-              <div className="text-sm text-gray-500">Total: {posts.length}</div>
-              <div className="flex rounded-lg border border-blue-200 p-1">
-                <Button
-                  variant={postsViewMode === "grid" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setPostsViewMode("grid")}
-                  className="h-8 w-8 p-0"
-                >
-                  <Grid3X3 className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={postsViewMode === "list" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setPostsViewMode("list")}
-                  className="h-8 w-8 p-0"
-                >
-                  <List className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            {isOwnProfile && (
+              <Button
+                onClick={() => setIsMediaTypeDialogOpen(true)}
+                className="rounded-full bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                <span className="hidden sm:inline">New Post</span>
+                <span className="sm:hidden">New</span>
+              </Button>
+            )}
           </div>
 
-          {/* Post Creation Widget */}
-          {isOwnProfile && (
-            <Card className="rounded-xl sm:rounded-2xl border-blue-100 shadow-sm bg-gradient-to-br from-white to-blue-50/30">
-              <CardContent className="p-4 sm:p-6">
-                <div className="flex gap-3 sm:gap-4">
-                  <div className="relative h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 overflow-hidden rounded-full">
-                    <Image
-                      src={user.profileImage || user.image || "/placeholder.svg?height=48&width=48"}
-                      alt={user.username}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 640px) 40px, 48px"
-                    />
-                  </div>
-                  <div className="flex-1 space-y-3 sm:space-y-4">
-                    <div className="relative">
-                      <Textarea
-                        placeholder={`What's on your mind, ${user.nickname || user.username}?`}
-                        value={newPost}
-                        onChange={(e) => setNewPost(e.target.value)}
-                        className="min-h-[100px] sm:min-h-[120px] rounded-xl sm:rounded-2xl border-blue-200 bg-white/80 backdrop-blur-sm resize-none text-sm sm:text-lg placeholder:text-gray-400 focus:border-blue-400 focus:ring-blue-400/20"
-                      />
-                      <div className="absolute bottom-2 sm:bottom-3 right-2 sm:right-3 flex items-center gap-2">
-                        <span className="text-xs text-gray-400">{newPost.length}/500</span>
-                      </div>
-                    </div>
-
-                    {imagePreview && (
-                      <div className="relative rounded-xl sm:rounded-2xl overflow-hidden">
-                        <Image
-                          src={imagePreview || "/placeholder.svg"}
-                          alt="Post preview"
-                          width={400}
-                          height={300}
-                          className="w-full object-cover max-h-48 sm:max-h-64"
-                        />
-                        <Button
-                          size="icon"
-                          variant="destructive"
-                          className="absolute top-2 right-2 h-7 w-7 sm:h-8 sm:w-8 rounded-full text-lg"
-                          onClick={() => {
-                            setImagePreview(null)
-                            setImageFile(null)
-                          }}
-                        >
-                          ×
-                        </Button>
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1 sm:gap-2">
-                        <label className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-full cursor-pointer transition-colors">
-                          <Paperclip className="h-4 w-4" />
-                          <span>Attach</span>
-                          <input
-                            type="file"
-                            accept="image/*,video/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0] || null
-                              handleMediaChange(file)
-                            }}
-                            className="hidden"
-                          />
-                        </label>
-                      </div>
-                      <Button
-                        onClick={handlePostSubmit}
-                        disabled={!newPost.trim() && !imagePreview}
-                        className="rounded-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-6 sm:px-8 py-2.5 font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm transform hover:scale-105"
-                      >
-                        <Send className="h-4 w-4 mr-2" />
-                        Share
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Posts Display */}
-          <div
-            className={
-              postsViewMode === "grid"
-                ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-                : "space-y-4 sm:space-y-6"
-            }
-          >
+          {/* Posts Grid */}
+          <div className="grid grid-cols-3 gap-1 sm:gap-2">
             {posts.length > 0 ? (
               posts.map((post) => (
-                <Card
+                <div
                   key={post.id}
-                  className={cn(
-                    "rounded-xl border-blue-100 shadow-sm hover:shadow-md transition-all bg-white overflow-hidden",
-                    postsViewMode === "grid" ? "aspect-square" : "sm:rounded-2xl",
-                  )}
+                  className="aspect-square bg-blue-50 rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition-opacity relative group"
+                  onClick={() => handlePostClick(post)}
                 >
-                  <CardContent className={cn("p-3", postsViewMode === "grid" ? "h-full flex flex-col" : "sm:p-6")}>
-                    {postsViewMode === "grid" ? (
-                      // Grid view - Instagram style
-                      <div className="flex flex-col h-full">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="relative h-6 w-6 overflow-hidden rounded-full">
-                            <Image
-                              src={user.profileImage || user.image || "/placeholder.svg?height=24&width=24"}
-                              alt={user.username}
-                              fill
-                              className="object-cover"
-                              sizes="24px"
-                            />
-                          </div>
-                          <span className="text-xs font-medium text-gray-900 truncate">
-                            {user.nickname || user.username}
-                          </span>
-                          {isOwnProfile && (
-                            <div className="ml-auto flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEditPost(post)}
-                                className="h-5 w-5 rounded-full hover:bg-blue-100 hover:text-blue-600"
-                                title="Edit post"
-                              >
-                                <Edit className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDeletePost(post.id)}
-                                className="h-5 w-5 rounded-full hover:bg-red-100 hover:text-red-600"
-                                title="Delete post"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-
-                        {post.video ? (
-                          <div className="flex-1 rounded-lg overflow-hidden mb-2">
-                            <video
-                              src={post.video}
-                              className="w-full h-full object-cover"
-                              controls
-                              preload="metadata"
-                            />
-                          </div>
-                        ) : post.image ? (
-                          <div className="flex-1 rounded-lg overflow-hidden mb-2">
-                            <Image
-                              src={post.image || "/placeholder.svg"}
-                              alt="Post image"
-                              width={300}
-                              height={300}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        ) : (
-                          <div className="flex-1 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-3 mb-2 flex items-center justify-center">
-                            <p className="text-xs text-gray-700 text-center line-clamp-4">{post.content}</p>
-                          </div>
-                        )}
-
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-3">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleLikePost(post.id)}
-                              className={cn(
-                                "flex items-center gap-1 p-1 h-auto",
-                                post.isLiked ? "text-red-600" : "text-gray-600",
-                              )}
-                            >
-                              <Heart className={cn("h-3 w-3", post.isLiked && "fill-current")} />
-                              <span>{post.likes}</span>
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleOpenComments(post.id)}
-                              className="flex items-center gap-1 p-1 h-auto text-gray-600"
-                            >
-                              <MessageCircle className="h-3 w-3" />
-                              <span>{post.comments}</span>
-                            </Button>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleSharePost(post.id)}
-                            className="p-1 h-auto text-gray-600"
-                          >
-                            <Share2 className="h-3 w-3" />
-                          </Button>
-                        </div>
+                  {post.video ? (
+                    <div className="relative w-full h-full">
+                      <video src={post.video} className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                        <Play className="h-6 w-6 text-white" />
                       </div>
-                    ) : (
-                      // List view - Facebook style
-                      <div className="flex gap-2 sm:gap-4">
-                        <div className="relative h-8 w-8 sm:h-12 sm:w-12 flex-shrink-0 overflow-hidden rounded-full">
-                          <Image
-                            src={user.profileImage || user.image || "/placeholder.svg?height=48&width=48"}
-                            alt={user.username}
-                            fill
-                            className="object-cover"
-                            sizes="(max-width: 640px) 32px, 48px"
-                          />
-                        </div>
-                        <div className="flex-1 space-y-2 sm:space-y-4 min-w-0">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
-                                <h3 className="font-semibold text-gray-900 text-xs sm:text-base truncate">
-                                  {user.nickname || user.username}
-                                </h3>
-                                <span className="text-xs text-gray-500 truncate">@{user.username}</span>
-                              </div>
-                              <p className="text-xs text-gray-500 mt-0.5 sm:mt-1">{formatDate(post.createdAt)}</p>
-                            </div>
-                            {isOwnProfile && (
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleEditPost(post)}
-                                  className="h-6 w-6 sm:h-8 sm:w-8 rounded-full hover:bg-blue-100 hover:text-blue-600 flex-shrink-0"
-                                  title="Edit post"
-                                >
-                                  <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleDeletePost(post.id)}
-                                  className="h-6 w-6 sm:h-8 sm:w-8 rounded-full hover:bg-red-100 hover:text-red-600 flex-shrink-0"
-                                  title="Delete post"
-                                >
-                                  <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-
-                          <p className="text-gray-800 leading-relaxed text-sm sm:text-base break-words">
-                            {post.content}
-                          </p>
-
-                          {post.video && (
-                            <div className="rounded-lg sm:rounded-xl overflow-hidden">
-                              <video
-                                src={post.video}
-                                className="w-full object-cover max-h-48 sm:max-h-80"
-                                controls
-                                preload="metadata"
-                              />
-                            </div>
-                          )}
-
-                          {post.image && (
-                            <div className="rounded-lg sm:rounded-xl overflow-hidden">
-                              <Image
-                                src={post.image || "/placeholder.svg"}
-                                alt="Post image"
-                                width={500}
-                                height={300}
-                                className="w-full object-cover max-h-48 sm:max-h-80"
-                              />
-                            </div>
-                          )}
-
-                          <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                            <div className="flex items-center gap-2 sm:gap-6">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleOpenComments(post.id)}
-                                className="flex items-center gap-1 rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors px-2 py-1"
-                              >
-                                <MessageCircle className="h-3 w-3 sm:h-5 sm:w-5" />
-                                <span className="font-medium text-xs sm:text-sm">{post.comments}</span>
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleLikePost(post.id)}
-                                className={cn(
-                                  "flex items-center gap-1 rounded-full transition-colors px-2 py-1 -ml-2",
-                                  post.isLiked ? "text-red-600 hover:bg-red-50" : "hover:bg-red-50 hover:text-red-600",
-                                )}
-                              >
-                                <Heart className={cn("h-3 w-3 sm:h-5 sm:w-5", post.isLiked && "fill-current")} />
-                                <span className="font-medium text-xs sm:text-sm">{post.likes}</span>
-                              </Button>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleSharePost(post.id)}
-                              className="rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors p-1"
-                              title="Share post"
-                            >
-                              <Share2 className="h-3 w-3 sm:h-5 sm:w-5" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                    </div>
+                  ) : post.image ? (
+                    <Image src={post.image || "/placeholder.svg"} alt="Post" fill className="object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center p-2">
+                      <p className="text-xs text-blue-800 text-center line-clamp-4">{post.content}</p>
+                    </div>
+                  )}
+                  {isOwnProfile && (
+                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeletePost(post.id)
+                        }}
+                        className="h-6 w-6 rounded-full bg-red-500/80 hover:bg-red-600 text-white"
+                        title="Delete post"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
               ))
             ) : (
-              <div className="text-center py-8 sm:py-12 text-gray-500 col-span-full">
+              <div className="col-span-3 text-center py-12 text-gray-500">
                 <div className="text-sm sm:text-base">
                   {isOwnProfile ? "You haven't posted anything yet." : "No posts to show."}
                 </div>
@@ -1583,7 +1306,7 @@ export default function ProfilePage() {
         <TabsContent value="notes" className="space-y-4 sm:space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-lg sm:text-xl font-semibold text-blue-600">
-              {isOwnProfile ? "Your Notes" : `${user.username}'s Notes`}
+              {isOwnProfile ? "Your Thoughts" : `${user.username}'s Thoughts`}
             </h2>
             {isOwnProfile && (
               <Button
@@ -1591,31 +1314,17 @@ export default function ProfilePage() {
                 className="rounded-full bg-blue-600 hover:bg-blue-700 text-white"
               >
                 <Plus className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">New Note</span>
+                <span className="hidden sm:inline">New Thought</span>
                 <span className="sm:hidden">New</span>
               </Button>
             )}
           </div>
 
-          {/* Character Usage - Only show for own profile */}
+          {/* Character Usage - More subtle */}
           {isOwnProfile && (
-            <Card className="rounded-xl bg-card shadow-sm border border-blue-100">
-              <CardContent className="p-4">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between rounded-xl bg-background/50 p-3 border border-blue-50">
-                    <span>Character Usage</span>
-                    <div className="text-right">
-                      <span className="font-medium">{thoughtsCharCount}</span>
-                      <span className="text-muted-foreground"> / {MAX_TOTAL_CHARS}</span>
-                    </div>
-                  </div>
-                  <Progress value={usagePercentage} className="h-2 w-full bg-blue-100">
-                    <div className="h-full bg-blue-600" style={{ width: `${Math.min(100, usagePercentage)}%` }} />
-                  </Progress>
-                  <div className="text-xs text-muted-foreground text-right">{remainingChars} characters remaining</div>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="text-xs text-gray-500 text-right">
+              {thoughtsCharCount} / {MAX_TOTAL_CHARS} characters used
+            </div>
           )}
 
           {/* Notes Display */}
@@ -1626,12 +1335,12 @@ export default function ProfilePage() {
                   <span className="text-2xl">📝</span>
                 </div>
                 <h3 className="text-lg font-semibold text-blue-600 mb-2">
-                  {isOwnProfile ? "No notes yet" : "No notes shared"}
+                  {isOwnProfile ? "No thoughts yet" : "No thoughts shared"}
                 </h3>
                 <p className="text-muted-foreground text-center mb-4">
                   {isOwnProfile
-                    ? "Begin building connections with your first note. Each reflection you add helps Mirro find patterns and insights that matter to you."
-                    : `${user.username} hasn't shared any notes yet.`}
+                    ? "Begin building connections with your first thought. Each reflection you add helps Mirro find patterns and insights that matter to you."
+                    : `${user.username} hasn't shared any thoughts yet.`}
                 </p>
                 {isOwnProfile && (
                   <Button
@@ -1639,7 +1348,7 @@ export default function ProfilePage() {
                     className="rounded-full bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     <Plus className="mr-2 h-4 w-4" />
-                    Add Your First Note
+                    Add Your First Thought
                   </Button>
                 )}
               </CardContent>
@@ -1689,116 +1398,400 @@ export default function ProfilePage() {
         </TabsContent>
       </Tabs>
 
-      {/* Edit Post Dialog */}
-      <Dialog open={isEditPostDialogOpen} onOpenChange={setIsEditPostDialogOpen}>
-        <DialogContent className="mx-4 sm:mx-auto sm:max-w-[500px] rounded-2xl">
+      {/* Media Type Selection Dialog */}
+      <Dialog open={isMediaTypeDialogOpen} onOpenChange={setIsMediaTypeDialogOpen}>
+        <DialogContent className="mx-4 sm:mx-auto sm:max-w-[400px] rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-blue-600">Edit Post</DialogTitle>
+            <DialogTitle className="text-center text-xl font-semibold text-blue-600">Create New Post</DialogTitle>
+            <DialogDescription className="text-center text-gray-600">Choose what you'd like to share</DialogDescription>
           </DialogHeader>
-          <div className="py-4 space-y-4">
-            <Textarea
-              value={editingPostContent}
-              onChange={(e) => setEditingPostContent(e.target.value)}
-              className="min-h-[120px] rounded-xl border-blue-200 resize-none"
-              placeholder="Edit your post..."
-            />
 
-            {/* Current Media */}
-            {editingPostMedia && !removeEditMedia && !newEditMedia && (
-              <div className="relative rounded-xl overflow-hidden">
-                {editingPostMediaType === "video" ? (
-                  <video src={editingPostMedia} className="w-full max-h-64 object-cover" controls />
-                ) : (
-                  <Image
-                    src={editingPostMedia || "/placeholder.svg"}
-                    alt="Current media"
-                    width={400}
-                    height={300}
-                    className="w-full max-h-64 object-cover"
-                  />
-                )}
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => setRemoveEditMedia(true)}
-                  className="absolute top-2 right-2 rounded-full"
-                >
-                  Remove
-                </Button>
-              </div>
-            )}
-
-            {/* New Media Preview */}
-            {newEditMedia && (
-              <div className="relative rounded-xl overflow-hidden">
-                {newEditMedia.type.startsWith("video/") ? (
-                  <video src={URL.createObjectURL(newEditMedia)} className="w-full max-h-64 object-cover" controls />
-                ) : (
-                  <Image
-                    src={URL.createObjectURL(newEditMedia) || "/placeholder.svg"}
-                    alt="New media"
-                    width={400}
-                    height={300}
-                    className="w-full max-h-64 object-cover"
-                  />
-                )}
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => setNewEditMedia(null)}
-                  className="absolute top-2 right-2 rounded-full"
-                >
-                  Remove
-                </Button>
-              </div>
-            )}
-
-            {/* Media Upload */}
-            {!newEditMedia && (removeEditMedia || !editingPostMedia) && (
-              <div className="flex items-center gap-2">
-                <label className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-full cursor-pointer transition-colors">
-                  <Paperclip className="h-4 w-4" />
-                  <span>Add Media</span>
-                  <input
-                    type="file"
-                    accept="image/*,video/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] || null
-                      setNewEditMedia(file)
-                      setRemoveEditMedia(false)
-                    }}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-            )}
-
-            <div className="text-xs text-gray-400 text-right">{editingPostContent.length}/500</div>
-          </div>
-          <DialogFooter className="flex gap-2">
+          <div className="grid gap-4 py-6">
             <Button
+              onClick={() => handleMediaTypeSelect("image")}
               variant="outline"
+              className="h-20 rounded-xl border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 transition-all group"
+            >
+              <div className="flex flex-col items-center gap-2">
+                <div className="h-8 w-8 rounded-full bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
+                  <Camera className="h-5 w-5 text-blue-600" />
+                </div>
+                <span className="font-medium text-blue-600">Photo</span>
+                <span className="text-xs text-gray-500">Share a photo</span>
+              </div>
+            </Button>
+
+            <Button
+              onClick={() => handleMediaTypeSelect("video")}
+              variant="outline"
+              className="h-20 rounded-xl border-2 border-purple-200 hover:border-purple-400 hover:bg-purple-50 transition-all group"
+            >
+              <div className="flex flex-col items-center gap-2">
+                <div className="h-8 w-8 rounded-full bg-purple-100 group-hover:bg-purple-200 flex items-center justify-center transition-colors">
+                  <Play className="h-5 w-5 text-purple-600" />
+                </div>
+                <span className="font-medium text-purple-600">Video</span>
+                <span className="text-xs text-gray-500">Share a video</span>
+              </div>
+            </Button>
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsMediaTypeDialogOpen(false)} className="w-full rounded-full">
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Post Dialog */}
+      <Dialog open={isCreatePostDialogOpen} onOpenChange={setIsCreatePostDialogOpen}>
+        <DialogContent className="mx-4 sm:mx-auto sm:max-w-[500px] rounded-2xl max-h-[90vh] overflow-hidden p-0">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b">
+            <Button
+              variant="ghost"
               onClick={() => {
-                setIsEditPostDialogOpen(false)
-                setEditingPostId(null)
-                setEditingPostContent("")
-                setEditingPostMedia(null)
-                setEditingPostMediaType(null)
-                setNewEditMedia(null)
-                setRemoveEditMedia(false)
+                setSelectedMedia(null)
+                setMediaPreview(null)
+                setMediaType(null)
+                setPostContent("")
+                setIsCreatePostDialogOpen(false)
               }}
-              className="rounded-full"
+              className="text-gray-600 hover:bg-gray-100 rounded-full px-3"
             >
               Cancel
             </Button>
+            <h2 className="text-lg font-semibold">New Post</h2>
             <Button
-              onClick={handleSavePostEdit}
-              disabled={!editingPostContent.trim() && !editingPostMedia && !newEditMedia}
-              className="rounded-full bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={handleCreatePost}
+              disabled={!selectedMedia}
+              className="rounded-full bg-blue-600 hover:bg-blue-700 text-white px-4 disabled:opacity-50"
             >
-              Save Changes
+              Share
             </Button>
-          </DialogFooter>
+          </div>
+
+          <div className="max-h-[calc(90vh-80px)] overflow-y-auto">
+            {/* Media Preview */}
+            {mediaPreview && (
+              <div className="relative bg-black">
+                <div className="aspect-square flex items-center justify-center">
+                  {mediaType === "video" ? (
+                    <video src={mediaPreview} className="max-h-full max-w-full object-contain" controls muted />
+                  ) : (
+                    <Image
+                      src={mediaPreview || "/placeholder.svg"}
+                      alt="Media preview"
+                      width={500}
+                      height={500}
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  )}
+                </div>
+
+                {/* Media controls overlay */}
+                <div className="absolute top-4 right-4 flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      const input = document.createElement("input")
+                      input.type = "file"
+                      input.accept = mediaType === "video" ? "video/*" : "image/*"
+                      input.onchange = (event) => {
+                        const syntheticEvent = {
+                          target: event.target,
+                          currentTarget: event.target,
+                        } as React.ChangeEvent<HTMLInputElement>
+                        handleMediaSelect(syntheticEvent)
+                      }
+                      input.click()
+                    }}
+                    className="rounded-full bg-black/60 hover:bg-black/80 text-white border-none backdrop-blur-sm"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Caption Section */}
+            <div className="p-4 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="relative h-10 w-10 overflow-hidden rounded-full flex-shrink-0">
+                  <Image
+                    src={session?.user?.image || "/placeholder.svg?height=40&width=40"}
+                    alt="Your avatar"
+                    fill
+                    className="object-cover"
+                    sizes="40px"
+                  />
+                </div>
+                <div className="flex-1 space-y-3">
+                  <div>
+                    <p className="font-medium text-gray-900">{session?.user?.name || "You"}</p>
+                    <Textarea
+                      value={postContent}
+                      onChange={(e) => setPostContent(e.target.value.slice(0, 2200))}
+                      className="mt-2 min-h-[100px] rounded-lg border-gray-200 resize-none text-sm placeholder:text-gray-400 focus:border-blue-400 focus:ring-blue-400"
+                      placeholder="Write a caption..."
+                    />
+                    <div className="flex justify-between items-center mt-2">
+                      <div className="text-xs text-gray-400">{postContent.length}/2,200 characters</div>
+                      {postContent.length > 2000 && (
+                        <div className="text-xs text-orange-500">{2200 - postContent.length} characters remaining</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Post Options */}
+                  <div className="space-y-3 pt-2 border-t border-gray-100">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">Accessibility</span>
+                      <Button variant="ghost" size="sm" className="text-blue-600 hover:bg-blue-50 rounded-full">
+                        Write alt text
+                      </Button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">Advanced settings</span>
+                      <Button variant="ghost" size="sm" className="text-blue-600 hover:bg-blue-50 rounded-full">
+                        <span className="mr-1">⚙️</span>
+                        Settings
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Post View Dialog */}
+      <Dialog open={isPostViewOpen} onOpenChange={setIsPostViewOpen}>
+        <DialogContent className="max-w-4xl w-[95vw] h-[90vh] p-0 bg-black border-none">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Post Details</DialogTitle>
+          </DialogHeader>
+          {selectedPost && (
+            <div className="flex h-full relative">
+              {/* Close button - top right */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsPostViewOpen(false)}
+                className="absolute top-4 right-4 z-50 h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 text-white border-none"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+
+              {/* Media Side with blurred background */}
+              <div className="flex-1 relative overflow-hidden">
+                {/* Blurred background */}
+                {(selectedPost.image || selectedPost.video) && (
+                  <div className="absolute inset-0">
+                    {selectedPost.video ? (
+                      <video
+                        src={selectedPost.video}
+                        className="w-full h-full object-cover blur-xl scale-110 opacity-30"
+                        muted
+                      />
+                    ) : (
+                      <Image
+                        src={selectedPost.image || "/placeholder.svg"}
+                        alt="Blurred background"
+                        fill
+                        className="object-cover blur-xl scale-110 opacity-30"
+                      />
+                    )}
+                  </div>
+                )}
+
+                {/* Main content */}
+                <div className="relative z-10 flex items-center justify-center h-full p-4">
+                  {selectedPost.video ? (
+                    <video
+                      src={selectedPost.video}
+                      className="max-h-full max-w-full object-contain"
+                      controls
+                      autoPlay
+                      loop
+                    />
+                  ) : selectedPost.image ? (
+                    <Image
+                      src={selectedPost.image || "/placeholder.svg"}
+                      alt="Post content"
+                      width={800}
+                      height={600}
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  ) : (
+                    <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg p-8 max-w-md">
+                      <p className="text-white text-xl font-medium text-center">{selectedPost.content}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Comments Side */}
+              <div className="w-96 bg-white flex flex-col">
+                {/* Header */}
+                <div className="p-4 border-b flex items-center gap-3">
+                  <div className="relative h-10 w-10 overflow-hidden rounded-full">
+                    <Image
+                      src={user.profileImage || user.image || "/placeholder.svg?height=40&width=40"}
+                      alt={user.username}
+                      fill
+                      className="object-cover"
+                      sizes="40px"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold">{user.nickname || user.username}</p>
+                    <p className="text-sm text-gray-500">{formatDate(selectedPost.createdAt)}</p>
+                  </div>
+                </div>
+
+                {/* Content */}
+                {(selectedPost.image || selectedPost.video) && selectedPost.content && (
+                  <div className="p-4 border-b">
+                    <p className="text-gray-800">{selectedPost.content}</p>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="p-4 border-b flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleLikePost(selectedPost.id)}
+                      className={cn(
+                        "flex items-center gap-2 rounded-full transition-colors px-3 py-1",
+                        selectedPost.isLiked ? "text-red-600 hover:bg-red-50" : "hover:bg-red-50 hover:text-red-600",
+                      )}
+                    >
+                      <Heart className={cn("h-5 w-5", selectedPost.isLiked && "fill-current")} />
+                      <span className="font-medium">{selectedPost.likes}</span>
+                    </Button>
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <MessageCircle className="h-5 w-5" />
+                      <span className="font-medium">{selectedPost.comments}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSharePost(selectedPost.id)}
+                      className="rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors p-2"
+                      title="Share post"
+                    >
+                      <Share2 className="h-5 w-5" />
+                    </Button>
+                    {isOwnProfile && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeletePost(selectedPost.id)}
+                        className="rounded-full hover:bg-red-50 hover:text-red-600 p-2"
+                        title="Delete post"
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Comments */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  {commentsLoading ? (
+                    <div className="flex justify-center py-8">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : comments.length > 0 ? (
+                    comments.map((comment) => (
+                      <div key={comment.id} className="flex gap-3 group">
+                        <div className="relative h-8 w-8 overflow-hidden rounded-full flex-shrink-0">
+                          <Image
+                            src={comment.user?.profileImage || "/placeholder.svg?height=32&width=32"}
+                            alt={comment.user?.username || "User"}
+                            fill
+                            className="object-cover"
+                            sizes="32px"
+                          />
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">
+                                {comment.user?.nickname || comment.user?.username}
+                              </span>
+                              <span className="text-xs text-gray-500">{formatDate(comment.createdAt)}</span>
+                            </div>
+                            {comment.userId === session?.user?.id && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeleteComment(comment.id)}
+                                className="h-6 w-6 rounded-full hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Delete comment"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-800">{comment.content}</p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <MessageCircle className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                      <p className="text-sm">No comments yet</p>
+                      <p className="text-xs text-gray-400">Be the first to comment!</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Comment Input */}
+                <div className="p-4 border-t">
+                  <div className="flex gap-3">
+                    <div className="relative h-8 w-8 overflow-hidden rounded-full flex-shrink-0">
+                      <Image
+                        src={session?.user?.image || "/placeholder.svg?height=32&width=32"}
+                        alt="Your avatar"
+                        fill
+                        className="object-cover"
+                        sizes="32px"
+                      />
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <Textarea
+                        placeholder="Write a comment..."
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        className="min-h-[60px] rounded-lg border-blue-200 resize-none text-sm"
+                      />
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={handleSubmitComment}
+                          disabled={!newComment.trim()}
+                          size="sm"
+                          className="rounded-full bg-blue-600 hover:bg-blue-700 text-white px-4"
+                        >
+                          <Send className="h-3 w-3 mr-1" />
+                          Comment
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -1806,9 +1799,9 @@ export default function ProfilePage() {
       <Dialog open={isAddThoughtDialogOpen} onOpenChange={setIsAddThoughtDialogOpen}>
         <DialogContent className="sm:max-w-[550px] rounded-xl bg-background/90 backdrop-blur-md border border-blue-200 w-[calc(100%-2rem)] mx-auto">
           <DialogHeader>
-            <DialogTitle className="text-blue-600">Create New Note</DialogTitle>
+            <DialogTitle className="text-blue-600">Create New Thought</DialogTitle>
             <DialogDescription>
-              Add a new note to your collection. These notes help build meaningful connections.
+              Add a new thought to your collection. These thoughts help build meaningful connections.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -1930,101 +1923,6 @@ export default function ProfilePage() {
               Save Changes
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Comments Dialog */}
-      <Dialog open={commentDialogOpen} onOpenChange={setCommentDialogOpen}>
-        <DialogContent className="mx-4 sm:mx-auto sm:max-w-[500px] max-h-[80vh] overflow-hidden rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-blue-600">Comments</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col h-[60vh]">
-            <div className="p-4 border-b">
-              <div className="flex gap-3">
-                <div className="relative h-8 w-8 overflow-hidden rounded-full flex-shrink-0">
-                  <Image
-                    src={user?.profileImage || user?.image || "/placeholder.svg?height=32&width=32"}
-                    alt="Your avatar"
-                    fill
-                    className="object-cover"
-                    sizes="32px"
-                  />
-                </div>
-                <div className="flex-1 space-y-2">
-                  <Textarea
-                    placeholder="Write a comment..."
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    className="min-h-[60px] rounded-lg border-blue-200 resize-none text-sm"
-                  />
-                  <div className="flex justify-end">
-                    <Button
-                      onClick={handleSubmitComment}
-                      disabled={!newComment.trim()}
-                      size="sm"
-                      className="rounded-full bg-blue-600 hover:bg-blue-700 text-white px-4"
-                    >
-                      <Send className="h-3 w-3 mr-1" />
-                      Comment
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {commentsLoading ? (
-                <div className="flex justify-center py-8">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                </div>
-              ) : comments.length > 0 ? (
-                comments.map((comment) => (
-                  <div key={comment.id} className="flex gap-3 group">
-                    <div className="relative h-8 w-8 overflow-hidden rounded-full flex-shrink-0">
-                      <Image
-                        src={comment.user?.profileImage || comment.user?.image || "/placeholder.svg?height=32&width=32"}
-                        alt={comment.user?.username || "User"}
-                        fill
-                        className="object-cover"
-                        sizes="32px"
-                      />
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm text-gray-900">
-                            {comment.user?.nickname || comment.user?.username}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {new Date(comment.createdAt).toLocaleDateString()}
-                          </span>
-                        </div>
-                        {comment.userId === session?.user?.id && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeleteComment(comment.id)}
-                            className="h-6 w-6 rounded-full hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="Delete comment"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-800 leading-relaxed">{comment.content}</p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <MessageCircle className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                  <p className="text-sm">No comments yet</p>
-                  <p className="text-xs text-gray-400">Be the first to comment!</p>
-                </div>
-              )}
-            </div>
-          </div>
         </DialogContent>
       </Dialog>
     </div>
