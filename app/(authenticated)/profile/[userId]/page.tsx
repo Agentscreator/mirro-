@@ -1131,80 +1131,104 @@ export default function ProfilePage() {
 
       {/* Followers Dialog */}
       <Dialog open={isFollowersDialogOpen} onOpenChange={setIsFollowersDialogOpen}>
-        <DialogContent className="mx-4 sm:mx-auto sm:max-w-[400px] max-h-[80vh] overflow-y-auto rounded-2xl">
+        <DialogContent className="w-[90vw] max-w-[400px] max-h-[80vh] overflow-hidden rounded-2xl mx-auto">
           <DialogHeader>
-            <DialogTitle className="text-blue-600">Followers</DialogTitle>
+            <DialogTitle className="text-blue-600 text-center">Followers</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-4">
-            {followers.length > 0 ? (
-              followers.map((follower) => (
-                <div key={follower.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
-                  <div className="relative h-10 w-10 overflow-hidden rounded-full">
-                    <Image
-                      src={follower.profileImage || follower.image || "/placeholder.svg?height=40&width=40"}
-                      alt={follower.username}
-                      fill
-                      className="object-cover"
-                      sizes="40px"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-900">{follower.nickname || follower.username}</div>
-                    {follower.nickname && <div className="text-sm text-gray-500">@{follower.username}</div>}
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => router.push(`/profile/${follower.id}`)}
-                    className="rounded-full"
+          <div className="overflow-y-auto max-h-[60vh] px-1">
+            <div className="space-y-2 py-2">
+              {followers.length > 0 ? (
+                followers.map((follower) => (
+                  <div
+                    key={follower.id}
+                    className="flex items-center gap-3 p-3 hover:bg-gray-50 active:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                    onClick={() => {
+                      setIsFollowersDialogOpen(false)
+                      router.push(`/profile/${follower.id}`)
+                    }}
                   >
-                    View
-                  </Button>
+                    <div className="relative h-12 w-12 overflow-hidden rounded-full flex-shrink-0">
+                      <Image
+                        src={follower.profileImage || follower.image || "/placeholder.svg?height=48&width=48"}
+                        alt={follower.username}
+                        fill
+                        className="object-cover"
+                        sizes="48px"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-900 text-sm sm:text-base truncate">
+                        {follower.nickname || follower.username}
+                      </div>
+                      {follower.nickname && (
+                        <div className="text-xs sm:text-sm text-gray-500 truncate">@{follower.username}</div>
+                      )}
+                    </div>
+                    <div className="text-gray-400 flex-shrink-0">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <div className="text-sm sm:text-base">No followers yet</div>
                 </div>
-              ))
-            ) : (
-              <div className="text-center py-8 text-gray-500">No followers yet</div>
-            )}
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
 
       {/* Following Dialog */}
       <Dialog open={isFollowingDialogOpen} onOpenChange={setIsFollowingDialogOpen}>
-        <DialogContent className="mx-4 sm:mx-auto sm:max-w-[400px] max-h-[80vh] overflow-y-auto rounded-2xl">
+        <DialogContent className="w-[90vw] max-w-[400px] max-h-[80vh] overflow-hidden rounded-2xl mx-auto">
           <DialogHeader>
-            <DialogTitle className="text-blue-600">Following</DialogTitle>
+            <DialogTitle className="text-blue-600 text-center">Following</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-4">
-            {following.length > 0 ? (
-              following.map((followedUser) => (
-                <div key={followedUser.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
-                  <div className="relative h-10 w-10 overflow-hidden rounded-full">
-                    <Image
-                      src={followedUser.profileImage || followedUser.image || "/placeholder.svg?height=40&width=40"}
-                      alt={followedUser.username}
-                      fill
-                      className="object-cover"
-                      sizes="40px"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-900">{followedUser.nickname || followedUser.username}</div>
-                    {followedUser.nickname && <div className="text-sm text-gray-500">@{followedUser.username}</div>}
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => router.push(`/profile/${followedUser.id}`)}
-                    className="rounded-full"
+          <div className="overflow-y-auto max-h-[60vh] px-1">
+            <div className="space-y-2 py-2">
+              {following.length > 0 ? (
+                following.map((followedUser) => (
+                  <div
+                    key={followedUser.id}
+                    className="flex items-center gap-3 p-3 hover:bg-gray-50 active:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                    onClick={() => {
+                      setIsFollowingDialogOpen(false)
+                      router.push(`/profile/${followedUser.id}`)
+                    }}
                   >
-                    View
-                  </Button>
+                    <div className="relative h-12 w-12 overflow-hidden rounded-full flex-shrink-0">
+                      <Image
+                        src={followedUser.profileImage || followedUser.image || "/placeholder.svg?height=48&width=48"}
+                        alt={followedUser.username}
+                        fill
+                        className="object-cover"
+                        sizes="48px"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-900 text-sm sm:text-base truncate">
+                        {followedUser.nickname || followedUser.username}
+                      </div>
+                      {followedUser.nickname && (
+                        <div className="text-xs sm:text-sm text-gray-500 truncate">@{followedUser.username}</div>
+                      )}
+                    </div>
+                    <div className="text-gray-400 flex-shrink-0">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <div className="text-sm sm:text-base">Not following anyone yet</div>
                 </div>
-              ))
-            ) : (
-              <div className="text-center py-8 text-gray-500">Not following anyone yet</div>
-            )}
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -1657,7 +1681,7 @@ export default function ProfilePage() {
               </div>
 
               {/* Comments Section */}
-              <div className="w-full sm:w-96 bg-white flex flex-col h-[40vh] sm:h-full">
+              <div className="w-full sm:w-96 bg-white flex flex-col h-[45vh] sm:h-full">
                 {/* Header */}
                 <div className="p-3 sm:p-4 border-b flex items-center gap-3 flex-shrink-0">
                   <div className="relative h-8 w-8 sm:h-10 sm:w-10 overflow-hidden rounded-full">
@@ -1734,48 +1758,50 @@ export default function ProfilePage() {
                     </div>
                   ) : comments.length > 0 ? (
                     comments.map((comment) => (
-                      <div key={comment.id} className="flex gap-2 sm:gap-3 group">
-                        <div className="relative h-6 w-6 sm:h-8 sm:w-8 overflow-hidden rounded-full flex-shrink-0">
+                      <div key={comment.id} className="flex gap-3 group">
+                        <div className="relative h-8 w-8 sm:h-10 sm:w-10 overflow-hidden rounded-full flex-shrink-0">
                           <Image
-                            src={comment.user?.profileImage || "/placeholder.svg?height=32&width=32"}
+                            src={comment.user?.profileImage || "/placeholder.svg?height=40&width=40"}
                             alt={comment.user?.username || "User"}
                             fill
                             className="object-cover"
-                            sizes="32px"
+                            sizes="40px"
                           />
                         </div>
                         <div className="flex-1 space-y-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 min-w-0">
-                              <span className="font-medium text-xs sm:text-sm truncate">
-                                {comment.user?.nickname || comment.user?.username}
-                              </span>
-                              <span className="text-xs text-gray-500 flex-shrink-0">
-                                {formatDate(comment.createdAt)}
-                              </span>
+                            <div className="flex flex-col gap-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-sm text-gray-900 truncate">
+                                  {comment.user?.nickname || comment.user?.username}
+                                </span>
+                                <span className="text-xs text-gray-500 flex-shrink-0">
+                                  {formatDate(comment.createdAt)}
+                                </span>
+                              </div>
+                              <p className="text-sm sm:text-base text-gray-800 leading-relaxed break-words">
+                                {comment.content}
+                              </p>
                             </div>
                             {comment.userId === session?.user?.id && (
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleDeleteComment(comment.id)}
-                                className="h-6 w-6 rounded-full hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                                className="h-8 w-8 rounded-full hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                                 title="Delete comment"
                               >
                                 <Trash2 className="h-3 w-3" />
                               </Button>
                             )}
                           </div>
-                          <p className="text-xs sm:text-sm text-gray-800 leading-relaxed break-words">
-                            {comment.content}
-                          </p>
                         </div>
                       </div>
                     ))
                   ) : (
                     <div className="text-center py-6 sm:py-8 text-gray-500">
                       <MessageCircle className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-2 text-gray-300" />
-                      <p className="text-xs sm:text-sm">No comments yet</p>
+                      <p className="text-sm">No comments yet</p>
                       <p className="text-xs text-gray-400">Be the first to comment!</p>
                     </div>
                   )}
