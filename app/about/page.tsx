@@ -14,7 +14,7 @@ export default function AboutPage() {
                 interaction?
               </p>
               <p>
-                Founded in 2023 by a team of technologists, designers, and social scientists, Mirro emerged from a
+                Founded in 2025 by a team of technologists, designers, and social scientists, Mirro emerged from a
                 shared frustration with existing social platforms that seemed to prioritize engagement metrics over
                 genuine human connection.
               </p>
