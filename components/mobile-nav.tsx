@@ -52,20 +52,6 @@ export function MobileNav() {
 
             <nav className="flex flex-1 flex-col items-center justify-center gap-8 p-6 text-center">
               <Link
-                href="/login"
-                className="text-2xl font-light text-cyan-300 transition-colors hover:text-white"
-                onClick={() => setIsOpen(false)}
-              >
-                Login
-              </Link>
-              <Link
-                href="/signup"
-                className="text-2xl font-light text-cyan-300 transition-colors hover:text-white"
-                onClick={() => setIsOpen(false)}
-              >
-                Sign Up
-              </Link>
-              <Link
                 href="/about"
                 className="text-2xl font-light text-cyan-300 transition-colors hover:text-white"
                 onClick={() => setIsOpen(false)}
@@ -78,6 +64,20 @@ export function MobileNav() {
                 onClick={() => setIsOpen(false)}
               >
                 Features
+              </Link>
+              <Link
+                href="/login"
+                className="text-2xl font-light text-cyan-300 transition-colors hover:text-white"
+                onClick={() => setIsOpen(false)}
+              >
+                Login
+              </Link>
+              <Link
+                href="/signup"
+                className="text-2xl font-light text-cyan-300 transition-colors hover:text-white"
+                onClick={() => setIsOpen(false)}
+              >
+                Sign Up
               </Link>
             </nav>
 

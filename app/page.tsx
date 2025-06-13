@@ -8,14 +8,15 @@ import { MobileNav } from "@/components/mobile-nav"
 export default function Home() {
   return (
     <main className="min-h-screen relative overflow-hidden font-sans">
-      {/* Background Image */}
+      {/* Background Image - adjusted for mobile */}
       <div className="absolute inset-0 z-0">
         <Image
           src="/images/floating-island.png"
           alt="Floating island with a child looking up"
           fill
           priority
-          className="object-cover object-center sm:object-right-top"
+          className="object-cover object-[center_top] md:object-center"
+          sizes="100vw"
         />
       </div>
 
@@ -42,7 +43,7 @@ export default function Home() {
               </Button>
             </Link>
             <Link href="/signup">
-              <Button className="px-6 py-2 bg-gradient-to-r from-blue-600 to-cyan-400 rounded-full text-white font-medium hover:shadow-lg hover:shadow-cyan-500/30 transition-all transform hover:translate-y-[-2px]">
+              <Button className="px-6 py-2 text-cyan-300 border border-cyan-300/30 rounded-full hover:bg-cyan-900/20 transition-all">
                 Sign Up
               </Button>
             </Link>
@@ -68,10 +69,10 @@ export default function Home() {
             </p>
 
             {/* Mobile Get Started Button */}
-            <div className="mt-8 md:hidden fade-in-delay-1">
+            <div className="mt-8 md:hidden">
               <Link href="/signup">
                 <Button size="lg" className="w-full px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-400 rounded-full text-white font-medium text-lg shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 transition-all transform hover:translate-y-[-2px]">
-                  Get Started
+                  Join Mirro Today
                 </Button>
               </Link>
             </div>
@@ -133,13 +134,6 @@ export default function Home() {
             Where technology meets humanity.
           </p>
         </footer>
-      </div>
-
-      {/* Mobile scroll indicator */}
-      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-30 md:hidden animate-bounce">
-        <div className="w-6 h-10 rounded-full border-2 border-cyan-300/50 flex justify-center items-start p-1">
-          <div className="w-1.5 h-3 bg-cyan-300/70 rounded-full animate-scroll"></div>
-        </div>
       </div>
     </main>
   )
