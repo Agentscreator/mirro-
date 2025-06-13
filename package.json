@@ -17,6 +17,10 @@
     "seed": "yarn seed:users && yarn seed:tags && yarn seed:thoughts && yarn seed:user-tags"
   },
   "dependencies": {
+    "@capacitor/android": "^7.3.0",
+    "@capacitor/cli": "^7.3.0",
+    "@capacitor/core": "^7.3.0",
+    "@capacitor/ios": "^7.3.0",
     "@clerk/nextjs": "^6.20.2",
     "@faker-js/faker": "^9.8.0",
     "@hookform/resolvers": "^3.9.1",
