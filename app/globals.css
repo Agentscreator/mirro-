@@ -25,6 +25,11 @@
     --input: 214 32% 91%;
     --ring: 221 83% 53%;
     --radius: 0.75rem;
+    
+    /* Additional custom variables */
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 30;
+    --background-end-rgb: 0, 0, 50;
   }
 
   .dark {
@@ -55,11 +60,15 @@
   * {
     @apply border-border;
   }
+  
   body {
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
     @apply bg-background text-foreground;
     background-image: radial-gradient(circle at 25% 25%, rgba(37, 99, 235, 0.03) 0%, transparent 50%),
-      radial-gradient(circle at 75% 75%, rgba(96, 165, 250, 0.03) 0%, transparent 50%);
+      radial-gradient(circle at 75% 75%, rgba(96, 165, 250, 0.03) 0%, transparent 50%),
+      linear-gradient(to bottom, transparent, rgb(var(--background-end-rgb))) rgb(var(--background-start-rgb));
     background-attachment: fixed;
+    color: rgb(var(--foreground-rgb));
   }
 
   .dark body {
@@ -68,8 +77,25 @@
   }
 }
 
-/* Add this to your existing CSS file */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .glow-effect {
+    box-shadow: 0 0 20px rgba(56, 232, 255, 0.6);
+  }
+  
+  .bg-blue-gradient {
+    background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+  }
+  
+  .blue-glow {
+    box-shadow: 0 0 15px rgba(56, 182, 255, 0.7), 0 0 10px rgba(37, 99, 235, 0.3), 0 0 20px rgba(29, 78, 216, 0.2);
+  }
+}
 
+/* Typography and cursor animations */
 .typing-cursor::after {
   content: "|";
   animation: blink 1s step-end infinite;
@@ -87,8 +113,7 @@
   }
 }
 
-/* Add this to the existing CSS file, near the other animations */
-
+/* Circle path animation */
 @keyframes rotate {
   from {
     stroke-dashoffset: 0;
@@ -103,7 +128,7 @@
   transform-origin: center;
 }
 
-/* Add fade-in animations */
+/* Fade in animations */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -116,9 +141,40 @@
 }
 
 .fade-in {
-  animation: fadeIn 0.5s ease-out forwards;
+  animation: fadeIn 1s ease-out forwards;
 }
 
+.fade-in-delay-1 {
+  opacity: 0;
+  animation: fadeIn 1s ease-out 0.3s forwards;
+}
+
+.fade-in-delay-2 {
+  opacity: 0;
+  animation: fadeIn 1s ease-out 0.6s forwards;
+}
+
+/* Logo pulse animation */
+@keyframes logoPulse {
+  0% {
+    opacity: 0.5;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 0.5;
+    transform: scale(0.95);
+  }
+}
+
+.logo-pulse {
+  animation: logoPulse 3s ease-in-out infinite;
+}
+
+/* Premium border effects */
 .premium-border {
   position: relative;
   border-radius: 0.75rem;
@@ -138,7 +194,7 @@
   pointer-events: none;
 }
 
-/* Update these styles to ensure proper light/dark mode support */
+/* Premium UI components */
 .premium-card {
   @apply bg-white backdrop-blur-md border border-blue-100 shadow-sm transition-all duration-300;
   border-radius: 0.75rem;
@@ -175,15 +231,12 @@
   border-color: rgba(37, 99, 235, 0.1);
 }
 
-.blue-glow {
-  box-shadow: 0 0 10px rgba(37, 99, 235, 0.3), 0 0 20px rgba(29, 78, 216, 0.2);
-}
-
 .silver-pattern {
   background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 5L55 20v20L30 55 5 40V20L30 5z' fill='none' stroke='rgba(37, 99, 235, 0.07)' stroke-width='1'/%3E%3C/svg%3E");
   background-size: 60px 60px;
 }
 
+/* Image upload preview */
 .image-upload-preview {
   position: relative;
   border-radius: 0.75rem;
@@ -216,6 +269,7 @@
   background: rgba(0, 0, 0, 0.7);
 }
 
+/* Gradient animations */
 .blue-gradient {
   @apply bg-blue-gradient;
   background-size: 200% 200%;
@@ -240,11 +294,7 @@
   }
 }
 
-/* Premium UI elements */
-.premium-input {
-  @apply bg-white border-blue-200 rounded-full focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50;
-}
-
+/* Premium form elements */
 .premium-dropdown {
   @apply rounded-xl shadow-premium overflow-hidden border border-border/50 bg-card/90 backdrop-blur-md;
 }
@@ -293,6 +343,7 @@
   @apply bg-blue-500;
 }
 
+/* Premium UI overlays */
 .premium-tooltip {
   @apply bg-card/90 backdrop-blur-md border border-border/50 text-foreground rounded-lg shadow-premium;
 }
@@ -325,10 +376,7 @@
   @apply bg-card/90 backdrop-blur-md border border-border/50 rounded-xl shadow-premium;
 }
 
-.premium-card-hover {
-  @apply hover:-translate-y-1 hover:shadow-md;
-}
-
+/* Premium typography and elements */
 .premium-icon {
   @apply text-blue-500;
 }
@@ -345,18 +393,11 @@
   @apply font-medium text-muted-foreground;
 }
 
-.premium-text {
-  @apply text-gray-800;
-}
-
-.premium-text-muted {
-  @apply text-gray-600;
-}
-
 .premium-divider {
   @apply border-border/50;
 }
 
+/* Premium scrollbar */
 .premium-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(37, 99, 235, 0.3) transparent;
@@ -380,7 +421,7 @@
   background-color: rgba(37, 99, 235, 0.5);
 }
 
-/* Messages doodle background */
+/* Doodle background for messages */
 .messages-doodle-bg {
   position: relative;
   background-color: rgba(249, 250, 251, 0.8);
@@ -400,9 +441,7 @@
   pointer-events: none;
 }
 
-/* Update the tag gradient styles to use lighter colors */
-
-/* Tag gradients and animations */
+/* Tag styles */
 .tag-gradient {
   background-size: 200% 200%;
   animation: gradientShift 3s ease infinite;
@@ -430,18 +469,17 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
-/* Dialog styles */
+.tag-text {
+  color: white;
+}
+
+/* Dialog and modal styles */
 .dialog-content {
   background-color: white;
   border-color: #e5e7eb;
 }
 
-/* Ensure tag text is visible */
-.tag-text {
-  color: white;
-}
-
-/* Ensure circular images on all devices */
+/* Circular image utility */
 .circular-image {
   position: relative;
   overflow: hidden;

@@ -1,11 +1,11 @@
 import type { Config } from "tailwindcss"
 
-const config = {
+const config: Config = {
   darkMode: ["class"],
   content: [
-    "./pages/**/*.{ts,tsx}",
-    "./components/**/*.{ts,tsx}",
-    "./app/**/*.{ts,tsx}",
+    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/**/*.{ts,tsx}",
     "*.{js,ts,jsx,tsx,mdx}",
   ],
@@ -19,6 +19,9 @@ const config = {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["var(--font-inter)", "Inter", "sans-serif"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -52,6 +55,12 @@ const config = {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+        },
+        cyan: {
+          200: "#a5f3fc",
+          300: "#67e8f9",
+          400: "#22d3ee",
+          500: "#06b6d4",
         },
         blue: {
           50: "#EFF6FF",
@@ -112,8 +121,34 @@ const config = {
         shimmer: "shimmer 2s linear infinite",
         float: "float 3s ease-in-out infinite",
       },
+      typography: {
+        DEFAULT: {
+          css: {
+            maxWidth: "65ch",
+            color: "inherit",
+            a: {
+              color: "inherit",
+              opacity: 0.8,
+              "&:hover": {
+                opacity: 1,
+                color: "#67e8f9",
+              },
+              textDecoration: "none",
+            },
+            b: { color: "inherit" },
+            strong: { color: "inherit" },
+            em: { color: "inherit" },
+            h1: { color: "inherit" },
+            h2: { color: "inherit" },
+            h3: { color: "inherit" },
+            h4: { color: "inherit" },
+            code: { color: "inherit" },
+          },
+        },
+      },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
+        "gradient-conic": "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
         "blue-gradient": "linear-gradient(to right, #2563eb, #3b82f6, #60a5fa)",
         "silver-gradient": "linear-gradient(to right, #e5e7eb, #f3f4f6, #ffffff)",
       },
@@ -124,6 +159,6 @@ const config = {
     },
   },
   plugins: [require("tailwindcss-animate")],
-} satisfies Config
+}
 
 export default config
