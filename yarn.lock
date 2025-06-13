@@ -3793,6 +3793,15 @@ fraction.js@^5.2.1:
   resolved "https://registry.npmmirror.com/fraction.js/-/fraction.js-5.2.2.tgz#c1295bc47307c5f93f75790859645fd74edaa195"
   integrity sha512-uXBDv5knpYmv/2gLzWQ5mBHGBRk9wcKTeWu6GLTUEQfjCxO09uM/mHDrojlL+Q1mVGIIFo149Gba7od1XPgSzQ==
 
+framer-motion@^12.17.0:
+  version "12.17.0"
+  resolved "https://registry.npmmirror.com/framer-motion/-/framer-motion-12.17.0.tgz#1f4c68e396f5f28860a84e102d92f28db44a85de"
+  integrity sha512-2hISKgDk49yCLStwG1wf4Kdy/D6eBw9/eRNaWFIYoI9vMQ/Mqd1Fz+gzVlEtxJmtQ9y4IWnXm19/+UXD3dAYAA==
+  dependencies:
+    motion-dom "^12.17.0"
+    motion-utils "^12.12.1"
+    tslib "^2.4.0"
+
 fresh@^2.0.0:
   version "2.0.0"
   resolved "https://registry.npmmirror.com/fresh/-/fresh-2.0.0.tgz"
@@ -5402,6 +5411,18 @@ mml-react@^0.4.7:
     linkifyjs "^2.1.9"
     react-markdown "^5.0.3"
     react-virtuoso "^2.10.2"
+
+motion-dom@^12.17.0:
+  version "12.17.0"
+  resolved "https://registry.npmmirror.com/motion-dom/-/motion-dom-12.17.0.tgz#69661708d0a0859042c3003cddf31d544c46d9fd"
+  integrity sha512-FA6/c70R9NKs3g41XDVONzmUUrEmyaifLVGCWtAmHP0usDnX9W+RN/tmbC4EUl0w6yLGvMTOwnWCFVgA5luhRg==
+  dependencies:
+    motion-utils "^12.12.1"
+
+motion-utils@^12.12.1:
+  version "12.12.1"
+  resolved "https://registry.npmmirror.com/motion-utils/-/motion-utils-12.12.1.tgz#63e28751325cb9d1cd684f3c273a570022b0010e"
+  integrity sha512-f9qiqUHm7hWSLlNW8gS9pisnsN7CRFRD58vNjptKdsqFLpkVnX00TNeD6Q0d27V9KzT7ySFyK1TZ/DShfVOv6w==
 
 ms@^2.0.0, ms@^2.1.1, ms@^2.1.3:
   version "2.1.3"

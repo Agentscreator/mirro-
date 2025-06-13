@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef } from "react"
+import { useMediaQuery } from "@/hooks/use-media-query"
 
 interface ParticlesProps {
   className?: string
@@ -18,6 +19,10 @@ interface Particle {
 
 export function Particles({ className = "", quantity = 30 }: ParticlesProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const isMobile = useMediaQuery("(max-width: 768px)")
+
+  // Reduce particle count on mobile
+  const particleCount = isMobile ? Math.floor(quantity / 2) : quantity
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -37,13 +42,13 @@ export function Particles({ className = "", quantity = 30 }: ParticlesProps) {
 
     const initParticles = () => {
       particles = []
-      for (let i = 0; i < quantity; i++) {
+      for (let i = 0; i < particleCount; i++) {
         particles.push({
           x: Math.random() * canvas.width,
           y: Math.random() * canvas.height,
-          size: Math.random() * 2 + 0.5,
-          speedX: (Math.random() - 0.5) * 0.3,
-          speedY: (Math.random() - 0.5) * 0.3,
+          size: Math.random() * (isMobile ? 1.5 : 2) + 0.5,
+          speedX: (Math.random() - 0.5) * (isMobile ? 0.2 : 0.3),
+          speedY: (Math.random() - 0.5) * (isMobile ? 0.2 : 0.3),
           opacity: Math.random() * 0.5 + 0.2,
         })
       }
@@ -80,7 +85,7 @@ export function Particles({ className = "", quantity = 30 }: ParticlesProps) {
       window.removeEventListener("resize", resizeCanvas)
       cancelAnimationFrame(animationFrameId)
     }
-  }, [quantity])
+  }, [particleCount, isMobile])
 
   return <canvas ref={canvasRef} className={className} />
 }
