@@ -8,14 +8,26 @@ import { MobileNav } from "@/components/mobile-nav"
 export default function Home() {
   return (
     <main className="min-h-screen relative overflow-hidden font-sans">
-      {/* Background Image - adjusted for mobile */}
-      <div className="absolute inset-0 z-0">
+      {/* Desktop Background Image - hidden on mobile */}
+      <div className="absolute inset-0 z-0 hidden md:block">
         <Image
           src="/images/floating-island.png"
           alt="Floating island with a child looking up"
           fill
           priority
-          className="object-cover object-[center_top] md:object-center"
+          className="object-cover object-center"
+          sizes="100vw"
+        />
+      </div>
+
+      {/* Mobile Background Image - hidden on desktop */}
+      <div className="absolute inset-0 z-0 block md:hidden">
+        <Image
+          src="/images/mobile-floating-island.png"
+          alt="Floating island with a child looking up"
+          fill
+          priority
+          className="object-cover object-center"
           sizes="100vw"
         />
       </div>
@@ -36,14 +48,14 @@ export default function Home() {
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex gap-4">
+          <div className="hidden md:flex items-center gap-4">
             <Link href="/login">
               <Button variant="ghost" className="px-6 py-2 text-cyan-300 border border-cyan-300/30 rounded-full hover:bg-cyan-900/20 transition-all">
                 Login
               </Button>
             </Link>
             <Link href="/signup">
-              <Button className="px-6 py-2 text-cyan-300 border border-cyan-300/30 rounded-full hover:bg-cyan-900/20 transition-all">
+              <Button className="px-6 py-2 bg-gradient-to-r from-blue-600 to-cyan-400 rounded-full text-white font-medium hover:shadow-lg hover:shadow-cyan-500/30 transition-all transform hover:translate-y-[-2px]">
                 Sign Up
               </Button>
             </Link>
@@ -68,20 +80,11 @@ export default function Home() {
               human.
             </p>
 
-            {/* Mobile Get Started Button */}
+            {/* Mobile CTA Button */}
             <div className="mt-8 md:hidden">
               <Link href="/signup">
                 <Button size="lg" className="w-full px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-400 rounded-full text-white font-medium text-lg shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 transition-all transform hover:translate-y-[-2px]">
                   Join Mirro Today
-                </Button>
-              </Link>
-            </div>
-
-            {/* Desktop Get Started Button */}
-            <div className="mt-8 hidden md:block fade-in-delay-1">
-              <Link href="/signup">
-                <Button size="lg" className="px-10 py-4 bg-gradient-to-r from-blue-600 to-cyan-400 rounded-full text-white font-medium text-lg hover:shadow-lg hover:shadow-cyan-500/30 transition-all transform hover:translate-y-[-2px]">
-                  Get Started
                 </Button>
               </Link>
             </div>

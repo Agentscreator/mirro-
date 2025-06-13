@@ -14,14 +14,26 @@ interface PageLayoutProps {
 export function PageLayout({ children, title, subtitle }: PageLayoutProps) {
   return (
     <main className="min-h-screen relative overflow-hidden font-sans">
-      {/* Background Image - adjusted for mobile */}
-      <div className="absolute inset-0 z-0">
+      {/* Desktop Background Image - hidden on mobile */}
+      <div className="absolute inset-0 z-0 hidden md:block">
         <Image
           src="/images/floating-island.png"
           alt="Floating island with a child looking up"
           fill
           priority
-          className="object-cover object-[center_top] md:object-center"
+          className="object-cover object-center"
+          sizes="100vw"
+        />
+      </div>
+
+      {/* Mobile Background Image - hidden on desktop */}
+      <div className="absolute inset-0 z-0 block md:hidden">
+        <Image
+          src="/images/mobile-floating-island.png"
+          alt="Floating island with a child looking up"
+          fill
+          priority
+          className="object-cover object-center"
           sizes="100vw"
         />
       </div>
