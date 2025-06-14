@@ -1011,6 +1011,7 @@ export default function ProfilePage() {
       toast({
         title: "Error",
         description: "Failed to delete thought. Please try again.",
+        variant: "destructive",
       })
     }
   }
@@ -1636,7 +1637,7 @@ export default function ProfilePage() {
         </TabsContent>
       </Tabs>
 
-      {/* Single Media Button Dialog */}
+      {/* Enhanced Single Media Button Dialog */}
       <Dialog open={isMediaTypeDialogOpen} onOpenChange={setIsMediaTypeDialogOpen}>
         <DialogContent className="mx-4 sm:mx-auto sm:max-w-[400px] w-[calc(100%-2rem)] rounded-2xl">
           <DialogHeader className="text-center">
@@ -1646,7 +1647,7 @@ export default function ProfilePage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex justify-center py-6">
+          <div className="flex justify-center py-8 sm:py-12">
             <Button
               onClick={() => {
                 const input = document.createElement("input")
@@ -1662,15 +1663,15 @@ export default function ProfilePage() {
                 input.click()
                 setIsMediaTypeDialogOpen(false)
               }}
-              className="h-24 w-24 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 transition-all group active:scale-95 p-0 overflow-hidden"
+              className="h-32 w-32 sm:h-40 sm:w-40 rounded-3xl bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 transition-all group active:scale-95 p-0 overflow-hidden shadow-xl hover:shadow-2xl"
             >
               <div className="relative h-full w-full flex items-center justify-center">
                 <Image
                   src="/images/media-button.png"
                   alt="Select media"
-                  width={48}
-                  height={48}
-                  className="opacity-90 group-hover:opacity-100 transition-opacity"
+                  width={80}
+                  height={80}
+                  className="opacity-90 group-hover:opacity-100 transition-opacity sm:w-20 sm:h-20"
                 />
               </div>
             </Button>
