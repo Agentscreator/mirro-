@@ -7,7 +7,21 @@ import { useSession } from "next-auth/react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Heart, MessageCircle, Share2, Send, Play, Pause, Volume2, VolumeX, MoreHorizontal } from "lucide-react"
+import {
+  Heart,
+  MessageCircle,
+  Share2,
+  Send,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  MoreHorizontal,
+  Reply,
+  ChevronDown,
+  ChevronUp,
+  Trash2,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
@@ -36,11 +50,13 @@ interface Comment {
   content: string
   createdAt: string
   userId: string
+  parentCommentId?: number | null
   user: {
     username: string
     nickname?: string
     profileImage?: string
   }
+  replies?: Comment[]
 }
 
 export default function FeedPage() {
@@ -56,7 +72,7 @@ export default function FeedPage() {
 
   // Video controls
   const [isPlaying, setIsPlaying] = useState(true)
-  const [isMuted, setIsMuted] = useState(true)
+  const [isMuted, setIsMuted] = useState(false) // Changed from true to false
   const videoRefs = useRef<{ [key: number]: HTMLVideoElement }>({})
 
   // Comments
@@ -65,17 +81,23 @@ export default function FeedPage() {
   const [newComment, setNewComment] = useState("")
   const [commentsLoading, setCommentsLoading] = useState(false)
 
+  // Reply states
+  const [replyingTo, setReplyingTo] = useState<number | null>(null)
+  const [replyContent, setReplyContent] = useState("")
+  const [expandedComments, setExpandedComments] = useState<Set<number>>(new Set())
+
   // Enhanced touch handling for TikTok-like smooth transitions
   const [touchStart, setTouchStart] = useState<{ y: number; time: number } | null>(null)
   const [touchCurrent, setTouchCurrent] = useState<number | null>(null)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
+  const [postScale, setPostScale] = useState(1) // For zoom effect
   const containerRef = useRef<HTMLDivElement>(null)
 
   const minSwipeDistance = 30
   const swipeThreshold = 0.15 // 15% of screen height for easier swiping
-  const dampingFactor = 0.7 // Damping for over-scroll effect
+  const dampingFactor = 0.5 // Reduced damping for less bounce
 
   const fetchPosts = useCallback(async (cursor?: string, excludeIds: number[] = []) => {
     try {
@@ -85,7 +107,7 @@ export default function FeedPage() {
         ...(excludeIds.length > 0 && { excludeIds: excludeIds.join(",") }),
       })
 
-      const response = await fetch(`/api/feed?${params}`)
+      const response = await fetch(`/api/feed?${params}&t=${Date.now()}`) // Added timestamp to prevent duplicates
       if (!response.ok) throw new Error("Failed to fetch posts")
 
       const data = await response.json()
@@ -118,27 +140,38 @@ export default function FeedPage() {
     const data = await fetchPosts(nextCursor || undefined, seenPostIds)
 
     if (data.posts.length > 0) {
-      setPosts((prev) => [...prev, ...data.posts])
-      setSeenPostIds((prev) => [...prev, ...data.posts.map((p: FeedPost) => p.id)])
+      // Filter out any duplicate posts
+      const newPosts = data.posts.filter(
+        (newPost: FeedPost) => !posts.some((existingPost) => existingPost.id === newPost.id),
+      )
+
+      if (newPosts.length > 0) {
+        setPosts((prev) => [...prev, ...newPosts])
+        setSeenPostIds((prev) => [...prev, ...newPosts.map((p: FeedPost) => p.id)])
+      }
+
       setNextCursor(data.nextCursor)
       setHasMore(data.hasMore)
     }
     setLoadingMore(false)
-  }, [fetchPosts, nextCursor, hasMore, loadingMore, seenPostIds])
+  }, [fetchPosts, nextCursor, hasMore, loadingMore, seenPostIds, posts])
 
   // Preload videos for smooth playback
-  const preloadVideo = useCallback((post: FeedPost) => {
-    if (post.video && !videoRefs.current[post.id]) {
-      const video = document.createElement("video")
-      video.src = post.video
-      video.muted = true
-      video.playsInline = true
-      video.preload = "metadata"
-      video.addEventListener("loadeddata", () => {
-        videoRefs.current[post.id] = video
-      })
-    }
-  }, [])
+  const preloadVideo = useCallback(
+    (post: FeedPost) => {
+      if (post.video && !videoRefs.current[post.id]) {
+        const video = document.createElement("video")
+        video.src = post.video
+        video.muted = isMuted
+        video.playsInline = true
+        video.preload = "metadata"
+        video.addEventListener("loadeddata", () => {
+          videoRefs.current[post.id] = video
+        })
+      }
+    },
+    [isMuted],
+  )
 
   useEffect(() => {
     if (session) {
@@ -162,10 +195,14 @@ export default function FeedPage() {
     }
   }, [posts, currentIndex, preloadVideo])
 
-  // Enhanced video playback with smooth transitions
+  // Enhanced video playback with smooth transitions and zoom effect
   useEffect(() => {
     const currentPost = posts[currentIndex]
     if (!currentPost) return
+
+    // Zoom effect when arriving at new post
+    setPostScale(1.05)
+    setTimeout(() => setPostScale(1), 200)
 
     // Pause all videos except current
     Object.entries(videoRefs.current).forEach(([postId, video]) => {
@@ -206,12 +243,12 @@ export default function FeedPage() {
     const deltaY = currentY - touchStart.y
     const screenHeight = window.innerHeight
 
-    // Apply damping for over-scroll effect
+    // Apply reduced damping for less bounce
     let offset = deltaY
 
     // Add resistance when trying to scroll beyond bounds
     if ((currentIndex === 0 && deltaY > 0) || (currentIndex === posts.length - 1 && deltaY < 0)) {
-      offset = deltaY * dampingFactor * 0.3 // Strong resistance at boundaries
+      offset = deltaY * dampingFactor * 0.2 // Reduced resistance
     } else {
       offset = deltaY * dampingFactor
     }
@@ -246,18 +283,18 @@ export default function FeedPage() {
         setCurrentIndex((prev) => prev - 1)
       }
 
-      // Smooth transition to final position
+      // Smoother transition to final position
       setTimeout(() => {
         setSwipeOffset(0)
         setIsTransitioning(false)
         setIsDragging(false)
-      }, 400)
+      }, 300) // Reduced from 400ms
     } else {
       // Smooth snap back to original position
       setSwipeOffset(0)
       setTimeout(() => {
         setIsDragging(false)
-      }, 300)
+      }, 200) // Reduced from 300ms
     }
 
     setTouchStart(null)
@@ -328,16 +365,49 @@ export default function FeedPage() {
     }
   }
 
+  // Helper function to organize comments into nested structure
+  const organizeComments = (comments: Comment[]): Comment[] => {
+    const commentMap = new Map<number, Comment>()
+    const topLevelComments: Comment[] = []
+
+    // First pass: create map of all comments
+    comments.forEach((comment) => {
+      commentMap.set(comment.id, { ...comment, replies: [] })
+    })
+
+    // Second pass: organize into hierarchy
+    comments.forEach((comment) => {
+      const commentWithReplies = commentMap.get(comment.id)!
+
+      if (comment.parentCommentId) {
+        // This is a reply
+        const parentComment = commentMap.get(comment.parentCommentId)
+        if (parentComment) {
+          parentComment.replies!.push(commentWithReplies)
+        }
+      } else {
+        // This is a top-level comment
+        topLevelComments.push(commentWithReplies)
+      }
+    })
+
+    return topLevelComments
+  }
+
   const fetchComments = async (postId: number) => {
     try {
       setCommentsLoading(true)
       const response = await fetch(`/api/posts/${postId}/comments`)
       if (response.ok) {
         const data = await response.json()
-        setComments(data.comments || [])
+        const organizedComments = organizeComments(data.comments || [])
+        setComments(organizedComments)
+      } else {
+        setComments([])
       }
     } catch (error) {
       console.error("Error fetching comments:", error)
+      setComments([])
     } finally {
       setCommentsLoading(false)
     }
@@ -348,22 +418,40 @@ export default function FeedPage() {
     await fetchComments(postId)
   }
 
-  const submitComment = async () => {
-    if (!newComment.trim() || !posts[currentIndex]) return
+  const submitComment = async (parentCommentId?: number) => {
+    const content = parentCommentId ? replyContent : newComment
+    if (!content.trim() || !posts[currentIndex]) return
 
     try {
       const response = await fetch(`/api/posts/${posts[currentIndex].id}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newComment.trim() }),
+        body: JSON.stringify({
+          content: content.trim(),
+          parentCommentId: parentCommentId || null,
+        }),
       })
 
       if (response.ok) {
-        setNewComment("")
+        // Refresh comments to get updated nested structure
         await fetchComments(posts[currentIndex].id)
+
+        // Reset form
+        if (parentCommentId) {
+          setReplyContent("")
+          setReplyingTo(null)
+        } else {
+          setNewComment("")
+        }
+
+        // Update comment count
+        setPosts((prev) =>
+          prev.map((post) => (post.id === posts[currentIndex].id ? { ...post, comments: post.comments + 1 } : post)),
+        )
+
         toast({
           title: "Success",
-          description: "Comment added successfully!",
+          description: parentCommentId ? "Reply added successfully!" : "Comment added successfully!",
         })
       }
     } catch (error) {
@@ -376,11 +464,176 @@ export default function FeedPage() {
     }
   }
 
+  const handleDeleteComment = async (commentId: number) => {
+    if (!confirm("Are you sure you want to delete this comment?")) return
+
+    try {
+      const response = await fetch(`/api/posts/${posts[currentIndex].id}/comments?commentId=${commentId}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        // Refresh comments to get updated nested structure
+        await fetchComments(posts[currentIndex].id)
+
+        setPosts((prev) =>
+          prev.map((post) =>
+            post.id === posts[currentIndex].id ? { ...post, comments: Math.max(0, post.comments - 1) } : post,
+          ),
+        )
+
+        toast({
+          title: "Success",
+          description: "Comment deleted successfully!",
+        })
+      }
+    } catch (error) {
+      console.error("Error deleting comment:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete comment. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
     })
+  }
+
+  const toggleCommentExpansion = (commentId: number) => {
+    const newExpanded = new Set(expandedComments)
+    if (newExpanded.has(commentId)) {
+      newExpanded.delete(commentId)
+    } else {
+      newExpanded.add(commentId)
+    }
+    setExpandedComments(newExpanded)
+  }
+
+  const renderComment = (comment: Comment, depth = 0) => {
+    const isExpanded = expandedComments.has(comment.id)
+    const hasReplies = comment.replies && comment.replies.length > 0
+    const maxDepth = 3 // Limit nesting depth
+
+    return (
+      <div key={comment.id} className={cn("space-y-2", depth > 0 && "ml-4 border-l-2 border-gray-100 pl-4")}>
+        <div className="flex gap-3 group">
+          <div className="relative h-8 w-8 overflow-hidden rounded-full flex-shrink-0">
+            <Image
+              src={comment.user?.profileImage || "/placeholder.svg?height=32&width=32"}
+              alt={comment.user?.username || "User"}
+              fill
+              className="object-cover"
+              sizes="32px"
+            />
+          </div>
+          <div className="flex-1 space-y-2 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex flex-col gap-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm text-gray-800 truncate">
+                    {comment.user?.nickname || comment.user?.username}
+                  </span>
+                  <span className="text-xs text-gray-500 flex-shrink-0">{formatDate(comment.createdAt)}</span>
+                </div>
+                <p className="text-sm text-gray-800 leading-relaxed break-words">{comment.content}</p>
+
+                {/* Reply button */}
+                <div className="flex items-center gap-2 mt-1">
+                  {depth < maxDepth && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)}
+                      className="h-6 px-2 text-xs text-gray-600 hover:text-blue-600"
+                    >
+                      <Reply className="h-3 w-3 mr-1" />
+                      Reply
+                    </Button>
+                  )}
+
+                  {hasReplies && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleCommentExpansion(comment.id)}
+                      className="h-6 px-2 text-xs text-gray-600 hover:text-blue-600"
+                    >
+                      {isExpanded ? (
+                        <>
+                          <ChevronUp className="h-3 w-3 mr-1" />
+                          Hide {comment.replies!.length}
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="h-3 w-3 mr-1" />
+                          {comment.replies!.length} {comment.replies!.length === 1 ? "reply" : "replies"}
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {comment.userId === session?.user?.id && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleDeleteComment(comment.id)}
+                  className="h-6 w-6 rounded-full hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                  title="Delete comment"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+
+            {/* Reply input */}
+            {replyingTo === comment.id && (
+              <div className="mt-3 space-y-2">
+                <Textarea
+                  placeholder={`Reply to ${comment.user?.nickname || comment.user?.username}...`}
+                  value={replyContent}
+                  onChange={(e) => setReplyContent(e.target.value)}
+                  className="min-h-[60px] rounded-lg border-blue-200 resize-none text-sm text-gray-800"
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setReplyingTo(null)
+                      setReplyContent("")
+                    }}
+                    className="text-xs text-gray-600 hover:text-gray-800 px-2 py-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => submitComment(comment.id)}
+                    disabled={!replyContent.trim()}
+                    size="sm"
+                    className="rounded-full bg-blue-600 hover:bg-blue-700 text-white px-3 text-xs"
+                  >
+                    <Send className="h-3 w-3 mr-1" />
+                    Reply
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Nested replies */}
+        {hasReplies && isExpanded && (
+          <div className="space-y-3">{comment.replies!.map((reply) => renderComment(reply, depth + 1))}</div>
+        )}
+      </div>
+    )
   }
 
   const renderPost = (post: FeedPost, index: number) => {
@@ -390,7 +643,7 @@ export default function FeedPage() {
     // Calculate opacity and scale for smooth transitions
     const distance = Math.abs(index - currentIndex)
     const opacity = distance === 0 ? 1 : Math.max(0.3, 1 - distance * 0.3)
-    const scale = distance === 0 ? 1 : Math.max(0.95, 1 - distance * 0.05)
+    const scale = distance === 0 ? (isActive ? postScale : 1) : Math.max(0.95, 1 - distance * 0.05)
 
     return (
       <div
@@ -399,10 +652,10 @@ export default function FeedPage() {
         style={{
           transform: `translateY(${offset}px) scale(${scale})`,
           transition: isTransitioning
-            ? "transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
+            ? "transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)" // Smoother easing
             : isDragging
               ? "none"
-              : "transform 0.3s ease-out",
+              : "transform 0.2s ease-out", // Faster snap back
           zIndex: isActive ? 10 : Math.max(1, 10 - distance),
           opacity,
         }}
@@ -467,8 +720,6 @@ export default function FeedPage() {
                           post.user.profileImage ||
                           post.user.image ||
                           "/placeholder.svg?height=40&width=40" ||
-                          "/placeholder.svg" ||
-                          "/placeholder.svg" ||
                           "/placeholder.svg"
                         }
                         alt={post.user.username}
@@ -590,28 +841,7 @@ export default function FeedPage() {
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
               </div>
             ) : comments.length > 0 ? (
-              comments.map((comment) => (
-                <div key={comment.id} className="flex gap-3">
-                  <div className="relative h-8 w-8 overflow-hidden rounded-full flex-shrink-0">
-                    <Image
-                      src={comment.user?.profileImage || "/placeholder.svg?height=32&width=32"}
-                      alt={comment.user?.username || "User"}
-                      fill
-                      className="object-cover"
-                      sizes="32px"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-sm text-gray-800">
-                        {comment.user?.nickname || comment.user?.username}
-                      </span>
-                      <span className="text-xs text-gray-500">{formatDate(comment.createdAt)}</span>
-                    </div>
-                    <p className="text-sm text-gray-800">{comment.content}</p>
-                  </div>
-                </div>
-              ))
+              comments.map((comment) => renderComment(comment))
             ) : (
               <div className="text-center py-8 text-gray-500">
                 <MessageCircle className="h-12 w-12 mx-auto mb-3 text-gray-300" />
@@ -641,7 +871,7 @@ export default function FeedPage() {
                 />
                 <div className="flex justify-end">
                   <Button
-                    onClick={submitComment}
+                    onClick={() => submitComment()}
                     disabled={!newComment.trim()}
                     size="sm"
                     className="rounded-full bg-blue-600 hover:bg-blue-700 text-white px-4"
