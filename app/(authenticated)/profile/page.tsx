@@ -1091,7 +1091,7 @@ export default function ProfilePage() {
                       ) : (
                         <>
                           <ChevronDown className="h-3 w-3 mr-1" />
-                          Show {comment.replies!.length} {comment.replies!.length === 1 ? "reply" : "replies"}
+                          {comment.replies!.length} {comment.replies!.length === 1 ? "reply" : "replies"}
                         </>
                       )}
                     </Button>
@@ -1119,7 +1119,7 @@ export default function ProfilePage() {
                   placeholder={`Reply to ${comment.user?.nickname || comment.user?.username}...`}
                   value={replyContent}
                   onChange={(e) => setReplyContent(e.target.value)}
-                  className="min-h-[60px] rounded-lg border-blue-200 resize-none text-sm"
+                  className="min-h-[60px] rounded-lg border-blue-200 resize-none text-sm text-gray-900 placeholder:text-gray-500"
                 />
                 <div className="flex justify-end gap-2">
                   <Button
@@ -1129,7 +1129,7 @@ export default function ProfilePage() {
                       setReplyingTo(null)
                       setReplyContent("")
                     }}
-                    className="text-xs"
+                    className="text-xs text-gray-600 hover:text-gray-800"
                   >
                     Cancel
                   </Button>
@@ -1966,7 +1966,7 @@ export default function ProfilePage() {
                         placeholder="Write a comment..."
                         value={newComment}
                         onChange={(e) => setNewComment(e.target.value)}
-                        className="min-h-[60px] rounded-lg border-blue-200 resize-none text-base"
+                        className="min-h-[60px] rounded-lg border-blue-200 resize-none text-base text-gray-900 placeholder:text-gray-500"
                       />
                       <div className="flex justify-end">
                         <Button

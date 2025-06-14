@@ -31,12 +31,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       return NextResponse.json({ error: "Post not found" }, { status: 404 })
     }
 
-    // Fetch comments with user info - Fixed to only select existing columns
+    // Fetch comments with user info - Include parentCommentId
     const comments = await db
       .select({
         id: postCommentsTable.id,
         postId: postCommentsTable.postId,
         userId: postCommentsTable.userId,
+        parentCommentId: postCommentsTable.parentCommentId,
         content: postCommentsTable.content,
         createdAt: postCommentsTable.createdAt,
         user: {
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     const body = await request.json()
-    const { content } = body
+    const { content, parentCommentId } = body
 
     if (!content?.trim()) {
       console.error("No content provided")
@@ -93,15 +94,33 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json({ error: "Post not found" }, { status: 404 })
     }
 
-    // Insert comment
-    const comment = await db
-      .insert(postCommentsTable)
-      .values({
-        postId,
-        userId: session.user.id,
-        content: content.trim(),
-      })
-      .returning()
+    // If parentCommentId is provided, verify it exists
+    if (parentCommentId) {
+      const parentComment = await db
+        .select()
+        .from(postCommentsTable)
+        .where(eq(postCommentsTable.id, parentCommentId))
+        .limit(1)
+
+      if (parentComment.length === 0) {
+        console.error("Parent comment not found")
+        return NextResponse.json({ error: "Parent comment not found" }, { status: 404 })
+      }
+    }
+
+    // Insert comment with parentCommentId
+    const insertData: any = {
+      postId,
+      userId: session.user.id,
+      content: content.trim(),
+    }
+
+    // Only add parentCommentId if it's provided and not null
+    if (parentCommentId) {
+      insertData.parentCommentId = parentCommentId
+    }
+
+    const comment = await db.insert(postCommentsTable).values(insertData).returning()
 
     // Fetch the comment with user info
     const commentWithUser = await db
@@ -109,6 +128,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         id: postCommentsTable.id,
         postId: postCommentsTable.postId,
         userId: postCommentsTable.userId,
+        parentCommentId: postCommentsTable.parentCommentId,
         content: postCommentsTable.content,
         createdAt: postCommentsTable.createdAt,
         user: {
@@ -122,6 +142,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       .where(eq(postCommentsTable.id, comment[0].id))
       .limit(1)
 
+    console.log("✅ Comment created successfully")
     return NextResponse.json(commentWithUser[0])
   } catch (error) {
     console.error("Create comment error:", error)
@@ -191,6 +212,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
         id: postCommentsTable.id,
         postId: postCommentsTable.postId,
         userId: postCommentsTable.userId,
+        parentCommentId: postCommentsTable.parentCommentId,
         content: postCommentsTable.content,
         createdAt: postCommentsTable.createdAt,
         user: {
@@ -256,7 +278,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       return NextResponse.json({ error: "Comment not found or unauthorized" }, { status: 404 })
     }
 
-    // Delete the comment
+    // Delete the comment (this will also delete replies due to CASCADE)
     await db.delete(postCommentsTable).where(eq(postCommentsTable.id, commentIdNum))
 
     console.log("✅ Comment deleted successfully")
