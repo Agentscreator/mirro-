@@ -1040,9 +1040,12 @@ export default function ProfilePage() {
     const maxDepth = 3 // Limit nesting depth
 
     return (
-      <div key={comment.id} className={cn("space-y-3", depth > 0 && "ml-8 border-l-2 border-gray-100 pl-4")}>
-        <div className="flex gap-3 group">
-          <div className="relative h-8 w-8 overflow-hidden rounded-full flex-shrink-0">
+      <div
+        key={comment.id}
+        className={cn("space-y-2 sm:space-y-3", depth > 0 && "ml-4 sm:ml-8 border-l-2 border-gray-100 pl-2 sm:pl-4")}
+      >
+        <div className="flex gap-2 sm:gap-3 group">
+          <div className="relative h-6 w-6 sm:h-8 sm:w-8 overflow-hidden rounded-full flex-shrink-0">
             <Image
               src={comment.user?.profileImage || "/placeholder.svg?height=32&width=32"}
               alt={comment.user?.username || "User"}
@@ -1051,16 +1054,16 @@ export default function ProfilePage() {
               sizes="32px"
             />
           </div>
-          <div className="flex-1 space-y-2 min-w-0">
+          <div className="flex-1 space-y-1 sm:space-y-2 min-w-0">
             <div className="flex items-start justify-between gap-2">
               <div className="flex flex-col gap-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm text-gray-900 truncate">
+                  <span className="font-medium text-xs sm:text-sm text-gray-900 truncate">
                     {comment.user?.nickname || comment.user?.username}
                   </span>
                   <span className="text-xs text-gray-500 flex-shrink-0">{formatDate(comment.createdAt)}</span>
                 </div>
-                <p className="text-sm text-gray-800 leading-relaxed break-words">{comment.content}</p>
+                <p className="text-xs sm:text-sm text-gray-800 leading-relaxed break-words">{comment.content}</p>
 
                 {/* Reply button */}
                 <div className="flex items-center gap-2 mt-1">
@@ -1069,9 +1072,9 @@ export default function ProfilePage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)}
-                      className="h-6 px-2 text-xs text-gray-600 hover:text-blue-600"
+                      className="h-5 w-auto sm:h-6 px-1 sm:px-2 text-xs text-gray-600 hover:text-blue-600"
                     >
-                      <Reply className="h-3 w-3 mr-1" />
+                      <Reply className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />
                       Reply
                     </Button>
                   )}
@@ -1081,16 +1084,16 @@ export default function ProfilePage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => toggleCommentExpansion(comment.id)}
-                      className="h-6 px-2 text-xs text-gray-600 hover:text-blue-600"
+                      className="h-5 w-auto sm:h-6 px-1 sm:px-2 text-xs text-gray-600 hover:text-blue-600"
                     >
                       {isExpanded ? (
                         <>
-                          <ChevronUp className="h-3 w-3 mr-1" />
-                          Hide {comment.replies!.length} {comment.replies!.length === 1 ? "reply" : "replies"}
+                          <ChevronUp className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />
+                          Hide {comment.replies!.length}
                         </>
                       ) : (
                         <>
-                          <ChevronDown className="h-3 w-3 mr-1" />
+                          <ChevronDown className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />
                           {comment.replies!.length} {comment.replies!.length === 1 ? "reply" : "replies"}
                         </>
                       )}
@@ -1104,22 +1107,22 @@ export default function ProfilePage() {
                   variant="ghost"
                   size="icon"
                   onClick={() => handleDeleteComment(comment.id)}
-                  className="h-6 w-6 rounded-full hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                  className="h-5 w-5 sm:h-6 sm:w-6 rounded-full hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                   title="Delete comment"
                 >
-                  <Trash2 className="h-3 w-3" />
+                  <Trash2 className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                 </Button>
               )}
             </div>
 
             {/* Reply input */}
             {replyingTo === comment.id && (
-              <div className="mt-3 space-y-2">
+              <div className="mt-2 sm:mt-3 space-y-2">
                 <Textarea
                   placeholder={`Reply to ${comment.user?.nickname || comment.user?.username}...`}
                   value={replyContent}
                   onChange={(e) => setReplyContent(e.target.value)}
-                  className="min-h-[60px] rounded-lg border-blue-200 resize-none text-sm text-gray-900 placeholder:text-gray-500"
+                  className="min-h-[50px] sm:min-h-[60px] rounded-lg border-blue-200 resize-none text-xs sm:text-sm text-gray-900 placeholder:text-gray-500"
                 />
                 <div className="flex justify-end gap-2">
                   <Button
@@ -1129,7 +1132,7 @@ export default function ProfilePage() {
                       setReplyingTo(null)
                       setReplyContent("")
                     }}
-                    className="text-xs text-gray-600 hover:text-gray-800"
+                    className="text-xs text-gray-600 hover:text-gray-800 px-2 py-1"
                   >
                     Cancel
                   </Button>
@@ -1137,9 +1140,9 @@ export default function ProfilePage() {
                     onClick={() => handleSubmitComment(comment.id)}
                     disabled={!replyContent.trim()}
                     size="sm"
-                    className="rounded-full bg-blue-600 hover:bg-blue-700 text-white px-3 text-xs"
+                    className="rounded-full bg-blue-600 hover:bg-blue-700 text-white px-2 sm:px-3 text-xs"
                   >
-                    <Send className="h-3 w-3 mr-1" />
+                    <Send className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" />
                     Reply
                   </Button>
                 </div>
@@ -1150,7 +1153,9 @@ export default function ProfilePage() {
 
         {/* Nested replies */}
         {hasReplies && isExpanded && (
-          <div className="space-y-3">{comment.replies!.map((reply) => renderComment(reply, depth + 1))}</div>
+          <div className="space-y-2 sm:space-y-3">
+            {comment.replies!.map((reply) => renderComment(reply, depth + 1))}
+          </div>
         )}
       </div>
     )
@@ -1804,13 +1809,13 @@ export default function ProfilePage() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setIsPostViewOpen(false)}
-                className="absolute top-2 right-2 sm:top-4 sm:right-4 z-50 h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-black/60 hover:bg-black/80 text-white border-none backdrop-blur-sm"
+                className="absolute top-2 right-2 sm:top-4 sm:right-4 z-50 h-10 w-10 rounded-full bg-black/70 hover:bg-black/90 text-white border-none backdrop-blur-sm"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </Button>
 
-              {/* Media Section - Reduced height on mobile */}
-              <div className="flex-1 relative overflow-hidden h-[35vh] sm:h-full">
+              {/* Media Section - Better mobile sizing */}
+              <div className="flex-1 relative overflow-hidden h-[40vh] sm:h-full">
                 {/* Blurred background */}
                 {(selectedPost.image || selectedPost.video) && (
                   <div className="absolute inset-0">
@@ -1851,18 +1856,20 @@ export default function ProfilePage() {
                       className="max-h-full max-w-full object-contain rounded-lg"
                     />
                   ) : (
-                    <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg p-3 sm:p-8 max-w-md mx-4">
-                      <p className="text-white text-base sm:text-xl font-medium text-center">{selectedPost.content}</p>
+                    <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg p-4 sm:p-8 max-w-md mx-4">
+                      <p className="text-white text-lg sm:text-xl font-medium text-center leading-relaxed">
+                        {selectedPost.content}
+                      </p>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Comments Section - Increased height on mobile */}
-              <div className="w-full sm:w-96 bg-white flex flex-col h-[65vh] sm:h-full">
-                {/* Header */}
-                <div className="p-4 border-b flex items-center gap-3 flex-shrink-0">
-                  <div className="relative h-10 w-10 overflow-hidden rounded-full">
+              {/* Comments Section - Optimized for mobile */}
+              <div className="w-full sm:w-96 bg-white flex flex-col h-[60vh] sm:h-full">
+                {/* Header - Compact on mobile */}
+                <div className="p-3 sm:p-4 border-b flex items-center gap-3 flex-shrink-0">
+                  <div className="relative h-8 w-8 sm:h-10 sm:w-10 overflow-hidden rounded-full">
                     <Image
                       src={user.profileImage || user.image || "/placeholder.svg?height=40&width=40"}
                       alt={user.username}
@@ -1872,87 +1879,90 @@ export default function ProfilePage() {
                     />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-base truncate">{user.nickname || user.username}</p>
-                    <p className="text-sm text-gray-500">{formatDate(selectedPost.createdAt)}</p>
+                    <p className="font-semibold text-sm sm:text-base truncate">{user.nickname || user.username}</p>
+                    <p className="text-xs sm:text-sm text-gray-500">{formatDate(selectedPost.createdAt)}</p>
                   </div>
                 </div>
 
-                {/* Content */}
+                {/* Content - Compact on mobile */}
                 {(selectedPost.image || selectedPost.video) && selectedPost.content && (
-                  <div className="p-4 border-b flex-shrink-0">
-                    <p className="text-gray-800 text-base leading-relaxed">{selectedPost.content}</p>
+                  <div className="p-3 sm:p-4 border-b flex-shrink-0 max-h-20 sm:max-h-none overflow-y-auto">
+                    <p className="text-gray-800 text-sm sm:text-base leading-relaxed">{selectedPost.content}</p>
                   </div>
                 )}
 
-                {/* Actions */}
-                <div className="p-4 border-b flex items-center justify-between flex-shrink-0">
-                  <div className="flex items-center gap-4">
+                {/* Actions - More compact on mobile */}
+                <div className="p-3 sm:p-4 border-b flex items-center justify-between flex-shrink-0">
+                  <div className="flex items-center gap-3 sm:gap-4">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleLikePost(selectedPost.id)}
                       className={cn(
-                        "flex items-center gap-2 rounded-full transition-colors px-3 py-2 min-w-0",
+                        "flex items-center gap-1 sm:gap-2 rounded-full transition-colors px-2 sm:px-3 py-1 sm:py-2 min-w-0",
                         selectedPost.isLiked
                           ? "text-red-600 hover:bg-red-50"
                           : "text-gray-700 hover:bg-red-50 hover:text-red-600",
                       )}
                     >
                       <Heart
-                        className={cn("h-5 w-5 flex-shrink-0 text-current", selectedPost.isLiked && "fill-current")}
+                        className={cn(
+                          "h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 text-current",
+                          selectedPost.isLiked && "fill-current",
+                        )}
                       />
-                      <span className="font-medium text-sm text-current">{selectedPost.likes}</span>
+                      <span className="font-medium text-xs sm:text-sm text-current">{selectedPost.likes}</span>
                     </Button>
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <MessageCircle className="h-5 w-5 flex-shrink-0" />
-                      <span className="font-medium text-sm">{selectedPost.comments}</span>
+                    <div className="flex items-center gap-1 sm:gap-2 text-gray-600">
+                      <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                      <span className="font-medium text-xs sm:text-sm">{selectedPost.comments}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 sm:gap-2">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleSharePost(selectedPost.id)}
-                      className="rounded-full text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors p-2"
+                      className="rounded-full text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors p-1.5 sm:p-2"
                       title="Share post"
                     >
-                      <Share2 className="h-5 w-5 text-current" />
+                      <Share2 className="h-4 w-4 sm:h-5 sm:w-5 text-current" />
                     </Button>
                     {isOwnProfile && (
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDeletePost(selectedPost.id)}
-                        className="rounded-full text-gray-700 hover:bg-red-50 hover:text-red-600 p-2"
+                        className="rounded-full text-gray-700 hover:bg-red-50 hover:text-red-600 p-1.5 sm:p-2"
                         title="Delete post"
                       >
-                        <Trash2 className="h-5 w-5 text-current" />
+                        <Trash2 className="h-4 w-4 sm:h-5 sm:w-5 text-current" />
                       </Button>
                     )}
                   </div>
                 </div>
 
-                {/* Comments - Now takes up majority of mobile screen */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+                {/* Comments - Scrollable area with proper mobile height */}
+                <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 min-h-0">
                   {commentsLoading ? (
-                    <div className="flex justify-center py-8">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    <div className="flex justify-center py-6 sm:py-8">
+                      <div className="animate-spin rounded-full h-5 w-5 sm:h-6 sm:w-6 border-b-2 border-blue-600"></div>
                     </div>
                   ) : comments.length > 0 ? (
                     comments.map((comment) => renderComment(comment))
                   ) : (
-                    <div className="text-center py-12 text-gray-500">
-                      <MessageCircle className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                      <p className="text-base">No comments yet</p>
-                      <p className="text-sm text-gray-400">Be the first to comment!</p>
+                    <div className="text-center py-8 sm:py-12 text-gray-500">
+                      <MessageCircle className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-2 sm:mb-3 text-gray-300" />
+                      <p className="text-sm sm:text-base">No comments yet</p>
+                      <p className="text-xs sm:text-sm text-gray-400">Be the first to comment!</p>
                     </div>
                   )}
                 </div>
 
-                {/* Comment Input - Enhanced for mobile */}
-                <div className="p-4 border-t flex-shrink-0 bg-white">
-                  <div className="flex gap-3">
-                    <div className="relative h-8 w-8 overflow-hidden rounded-full flex-shrink-0">
+                {/* Comment Input - Fixed at bottom with better mobile UX */}
+                <div className="p-3 sm:p-4 border-t flex-shrink-0 bg-white safe-area-inset-bottom">
+                  <div className="flex gap-2 sm:gap-3">
+                    <div className="relative h-7 w-7 sm:h-8 sm:w-8 overflow-hidden rounded-full flex-shrink-0">
                       <Image
                         src={session?.user?.image || "/placeholder.svg?height=32&width=32"}
                         alt="Your avatar"
@@ -1961,21 +1971,21 @@ export default function ProfilePage() {
                         sizes="32px"
                       />
                     </div>
-                    <div className="flex-1 space-y-3">
+                    <div className="flex-1 space-y-2 sm:space-y-3">
                       <Textarea
                         placeholder="Write a comment..."
                         value={newComment}
                         onChange={(e) => setNewComment(e.target.value)}
-                        className="min-h-[60px] rounded-lg border-blue-200 resize-none text-base text-gray-900 placeholder:text-gray-500"
+                        className="min-h-[50px] sm:min-h-[60px] rounded-lg border-blue-200 resize-none text-sm sm:text-base text-gray-900 placeholder:text-gray-500"
                       />
                       <div className="flex justify-end">
                         <Button
                           onClick={() => handleSubmitComment()}
                           disabled={!newComment.trim()}
                           size="sm"
-                          className="rounded-full bg-blue-600 hover:bg-blue-700 text-white px-4 text-sm"
+                          className="rounded-full bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 text-xs sm:text-sm"
                         >
-                          <Send className="h-4 w-4 mr-2" />
+                          <Send className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                           Comment
                         </Button>
                       </div>
