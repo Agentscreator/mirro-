@@ -26,6 +26,9 @@ import {
   Trash2,
   X,
   Play,
+  Reply,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { cn } from "@/lib/utils"
@@ -92,11 +95,13 @@ interface Comment {
   content: string
   createdAt: string
   userId: string
+  parentCommentId?: number | null
   user: {
     username: string
     nickname?: string
     profileImage?: string
   }
+  replies?: Comment[]
 }
 
 export default function ProfilePage() {
@@ -135,6 +140,11 @@ export default function ProfilePage() {
   const [comments, setComments] = useState<Comment[]>([])
   const [newComment, setNewComment] = useState("")
   const [commentsLoading, setCommentsLoading] = useState(false)
+
+  // Reply states
+  const [replyingTo, setReplyingTo] = useState<number | null>(null)
+  const [replyContent, setReplyContent] = useState("")
+  const [expandedComments, setExpandedComments] = useState<Set<number>>(new Set())
 
   // Post editing states
   const [editingPostId, setEditingPostId] = useState<number | null>(null)
@@ -258,13 +268,43 @@ export default function ProfilePage() {
     }
   }
 
+  // Helper function to organize comments into nested structure
+  const organizeComments = (comments: Comment[]): Comment[] => {
+    const commentMap = new Map<number, Comment>()
+    const topLevelComments: Comment[] = []
+
+    // First pass: create map of all comments
+    comments.forEach((comment) => {
+      commentMap.set(comment.id, { ...comment, replies: [] })
+    })
+
+    // Second pass: organize into hierarchy
+    comments.forEach((comment) => {
+      const commentWithReplies = commentMap.get(comment.id)!
+
+      if (comment.parentCommentId) {
+        // This is a reply
+        const parentComment = commentMap.get(comment.parentCommentId)
+        if (parentComment) {
+          parentComment.replies!.push(commentWithReplies)
+        }
+      } else {
+        // This is a top-level comment
+        topLevelComments.push(commentWithReplies)
+      }
+    })
+
+    return topLevelComments
+  }
+
   const fetchComments = async (postId: number) => {
     try {
       setCommentsLoading(true)
       const response = await fetch(`/api/posts/${postId}/comments`)
       if (response.ok) {
         const data = await response.json()
-        setComments(data.comments || [])
+        const organizedComments = organizeComments(data.comments || [])
+        setComments(organizedComments)
       } else {
         setComments([])
       }
@@ -475,20 +515,33 @@ export default function ProfilePage() {
     }
   }
 
-  const handleSubmitComment = async () => {
-    if (!newComment.trim() || !selectedPost) return
+  const handleSubmitComment = async (parentCommentId?: number) => {
+    const content = parentCommentId ? replyContent : newComment
+    if (!content.trim() || !selectedPost) return
 
     try {
       const response = await fetch(`/api/posts/${selectedPost.id}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newComment.trim() }),
+        body: JSON.stringify({
+          content: content.trim(),
+          parentCommentId: parentCommentId || null,
+        }),
       })
 
       if (response.ok) {
         const newCommentData = await response.json()
-        setComments([newCommentData, ...comments])
-        setNewComment("")
+
+        // Refresh comments to get updated nested structure
+        await fetchComments(selectedPost.id)
+
+        // Reset form
+        if (parentCommentId) {
+          setReplyContent("")
+          setReplyingTo(null)
+        } else {
+          setNewComment("")
+        }
 
         // Update comment count
         const updatedPosts = posts.map((post) =>
@@ -502,7 +555,7 @@ export default function ProfilePage() {
 
         toast({
           title: "Success",
-          description: "Comment added successfully!",
+          description: parentCommentId ? "Reply added successfully!" : "Comment added successfully!",
         })
       } else {
         throw new Error("Failed to add comment")
@@ -526,8 +579,8 @@ export default function ProfilePage() {
       })
 
       if (response.ok) {
-        const updatedComments = comments.filter((comment) => comment.id !== commentId)
-        setComments(updatedComments)
+        // Refresh comments to get updated nested structure
+        await fetchComments(selectedPost!.id)
 
         const updatedPosts = posts.map((post) =>
           post.id === selectedPost?.id ? { ...post, comments: Math.max(0, post.comments - 1) } : post,
@@ -616,7 +669,8 @@ export default function ProfilePage() {
       if (response.ok) {
         const shareData = await response.json()
 
-        if (navigator.share) {
+        // Try native sharing first on mobile
+        if (navigator.share && /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
           try {
             await navigator.share({
               title: shareData.title,
@@ -625,15 +679,38 @@ export default function ProfilePage() {
             })
             return
           } catch (shareError) {
-            // Fallback to clipboard
+            console.log("Native share failed, falling back to clipboard")
           }
         }
 
-        await navigator.clipboard.writeText(shareData.url)
-        toast({
-          title: "Link Copied!",
-          description: "Post link has been copied to your clipboard.",
-        })
+        // Fallback to clipboard
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(shareData.url)
+          toast({
+            title: "Link Copied!",
+            description: "Post link has been copied to your clipboard.",
+          })
+        } else {
+          // Fallback for older browsers
+          const textArea = document.createElement("textarea")
+          textArea.value = shareData.url
+          document.body.appendChild(textArea)
+          textArea.focus()
+          textArea.select()
+          try {
+            document.execCommand("copy")
+            toast({
+              title: "Link Copied!",
+              description: "Post link has been copied to your clipboard.",
+            })
+          } catch (err) {
+            toast({
+              title: "Share",
+              description: `Copy this link: ${shareData.url}`,
+            })
+          }
+          document.body.removeChild(textArea)
+        }
       } else {
         throw new Error("Failed to share post")
       }
@@ -642,6 +719,7 @@ export default function ProfilePage() {
       toast({
         title: "Error",
         description: "Failed to share post. Please try again.",
+        variant: "destructive",
       })
     }
   }
@@ -946,6 +1024,138 @@ export default function ProfilePage() {
     })
   }
 
+  const toggleCommentExpansion = (commentId: number) => {
+    const newExpanded = new Set(expandedComments)
+    if (newExpanded.has(commentId)) {
+      newExpanded.delete(commentId)
+    } else {
+      newExpanded.add(commentId)
+    }
+    setExpandedComments(newExpanded)
+  }
+
+  const renderComment = (comment: Comment, depth = 0) => {
+    const isExpanded = expandedComments.has(comment.id)
+    const hasReplies = comment.replies && comment.replies.length > 0
+    const maxDepth = 3 // Limit nesting depth
+
+    return (
+      <div key={comment.id} className={cn("space-y-3", depth > 0 && "ml-8 border-l-2 border-gray-100 pl-4")}>
+        <div className="flex gap-3 group">
+          <div className="relative h-8 w-8 overflow-hidden rounded-full flex-shrink-0">
+            <Image
+              src={comment.user?.profileImage || "/placeholder.svg?height=32&width=32"}
+              alt={comment.user?.username || "User"}
+              fill
+              className="object-cover"
+              sizes="32px"
+            />
+          </div>
+          <div className="flex-1 space-y-2 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex flex-col gap-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm text-gray-900 truncate">
+                    {comment.user?.nickname || comment.user?.username}
+                  </span>
+                  <span className="text-xs text-gray-500 flex-shrink-0">{formatDate(comment.createdAt)}</span>
+                </div>
+                <p className="text-sm text-gray-800 leading-relaxed break-words">{comment.content}</p>
+
+                {/* Reply button */}
+                <div className="flex items-center gap-2 mt-1">
+                  {depth < maxDepth && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)}
+                      className="h-6 px-2 text-xs text-gray-600 hover:text-blue-600"
+                    >
+                      <Reply className="h-3 w-3 mr-1" />
+                      Reply
+                    </Button>
+                  )}
+
+                  {hasReplies && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleCommentExpansion(comment.id)}
+                      className="h-6 px-2 text-xs text-gray-600 hover:text-blue-600"
+                    >
+                      {isExpanded ? (
+                        <>
+                          <ChevronUp className="h-3 w-3 mr-1" />
+                          Hide {comment.replies!.length} {comment.replies!.length === 1 ? "reply" : "replies"}
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="h-3 w-3 mr-1" />
+                          Show {comment.replies!.length} {comment.replies!.length === 1 ? "reply" : "replies"}
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {comment.userId === session?.user?.id && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleDeleteComment(comment.id)}
+                  className="h-6 w-6 rounded-full hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                  title="Delete comment"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+
+            {/* Reply input */}
+            {replyingTo === comment.id && (
+              <div className="mt-3 space-y-2">
+                <Textarea
+                  placeholder={`Reply to ${comment.user?.nickname || comment.user?.username}...`}
+                  value={replyContent}
+                  onChange={(e) => setReplyContent(e.target.value)}
+                  className="min-h-[60px] rounded-lg border-blue-200 resize-none text-sm"
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setReplyingTo(null)
+                      setReplyContent("")
+                    }}
+                    className="text-xs"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => handleSubmitComment(comment.id)}
+                    disabled={!replyContent.trim()}
+                    size="sm"
+                    className="rounded-full bg-blue-600 hover:bg-blue-700 text-white px-3 text-xs"
+                  >
+                    <Send className="h-3 w-3 mr-1" />
+                    Reply
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Nested replies */}
+        {hasReplies && isExpanded && (
+          <div className="space-y-3">{comment.replies!.map((reply) => renderComment(reply, depth + 1))}</div>
+        )}
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -1085,21 +1295,21 @@ export default function ProfilePage() {
                 <Textarea
                   value={editedAbout}
                   onChange={(e) => setEditedAbout(e.target.value)}
-                  className="min-h-[80px] sm:min-h-[100px] rounded-xl sm:rounded-2xl border-blue-200 bg-white/80 backdrop-blur-sm resize-none text-sm sm:text-base"
+                  className="min-h-[80px] sm:min-h-[100px] rounded-xl sm:rounded-2xl border-blue-200 bg-white/80 backdrop-blur-sm resize-none text-sm sm:text-base text-gray-900 placeholder-gray-500 focus:text-gray-900"
                   placeholder="Tell us about yourself..."
                 />
                 <div className="flex justify-end gap-2">
                   <Button
                     variant="outline"
                     onClick={() => setIsEditingAbout(false)}
-                    className="rounded-full px-4 text-sm"
+                    className="rounded-full px-4 text-sm text-gray-700 border-gray-300 hover:bg-gray-50 hover:text-gray-800"
                     size="sm"
                   >
                     Cancel
                   </Button>
                   <Button
                     onClick={handleSaveAbout}
-                    className="rounded-full px-4 bg-blue-600 hover:bg-blue-700 text-sm"
+                    className="rounded-full px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm"
                     size="sm"
                   >
                     Save
@@ -1120,7 +1330,7 @@ export default function ProfilePage() {
                     className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity rounded-full hover:bg-blue-100 h-8 w-8 sm:h-10 sm:w-10"
                     onClick={() => setIsEditingAbout(true)}
                   >
-                    <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <Edit className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600" />
                   </Button>
                 )}
               </div>
@@ -1570,41 +1780,9 @@ export default function ProfilePage() {
                     <Textarea
                       value={postContent}
                       onChange={(e) => setPostContent(e.target.value.slice(0, 2200))}
-                      className="mt-2 min-h-[80px] sm:min-h-[100px] rounded-lg border-gray-200 resize-none text-sm sm:text-base placeholder:text-gray-400 focus:border-blue-400 focus:ring-blue-400"
+                      className="mt-2 min-h-[80px] sm:min-h-[100px] rounded-lg border-gray-200 resize-none text-sm sm:text-base placeholder:text-gray-400 focus:border-blue-400 focus:ring-blue-400 text-gray-900"
                       placeholder="Write a caption..."
                     />
-                    <div className="flex justify-between items-center mt-2">
-                      <div className="text-xs text-gray-400">{postContent.length}/2,200 characters</div>
-                      {postContent.length > 2000 && (
-                        <div className="text-xs text-orange-500">{2200 - postContent.length} remaining</div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Post Options */}
-                  <div className="space-y-2 sm:space-y-3 pt-2 border-t border-gray-100">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs sm:text-sm font-medium text-gray-700">Accessibility</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-blue-600 hover:bg-blue-50 rounded-full text-xs sm:text-sm px-2 sm:px-3"
-                      >
-                        Write alt text
-                      </Button>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs sm:text-sm font-medium text-gray-700">Advanced settings</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-blue-600 hover:bg-blue-50 rounded-full text-xs sm:text-sm px-2 sm:px-3"
-                      >
-                        <span className="mr-1">⚙️</span>
-                        Settings
-                      </Button>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -1715,11 +1893,15 @@ export default function ProfilePage() {
                       onClick={() => handleLikePost(selectedPost.id)}
                       className={cn(
                         "flex items-center gap-2 rounded-full transition-colors px-3 py-2 min-w-0",
-                        selectedPost.isLiked ? "text-red-600 hover:bg-red-50" : "hover:bg-red-50 hover:text-red-600",
+                        selectedPost.isLiked
+                          ? "text-red-600 hover:bg-red-50"
+                          : "text-gray-700 hover:bg-red-50 hover:text-red-600",
                       )}
                     >
-                      <Heart className={cn("h-5 w-5 flex-shrink-0", selectedPost.isLiked && "fill-current")} />
-                      <span className="font-medium text-sm">{selectedPost.likes}</span>
+                      <Heart
+                        className={cn("h-5 w-5 flex-shrink-0 text-current", selectedPost.isLiked && "fill-current")}
+                      />
+                      <span className="font-medium text-sm text-current">{selectedPost.likes}</span>
                     </Button>
                     <div className="flex items-center gap-2 text-gray-600">
                       <MessageCircle className="h-5 w-5 flex-shrink-0" />
@@ -1731,20 +1913,20 @@ export default function ProfilePage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => handleSharePost(selectedPost.id)}
-                      className="rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors p-2"
+                      className="rounded-full text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors p-2"
                       title="Share post"
                     >
-                      <Share2 className="h-5 w-5" />
+                      <Share2 className="h-5 w-5 text-current" />
                     </Button>
                     {isOwnProfile && (
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDeletePost(selectedPost.id)}
-                        className="rounded-full hover:bg-red-50 hover:text-red-600 p-2"
+                        className="rounded-full text-gray-700 hover:bg-red-50 hover:text-red-600 p-2"
                         title="Delete post"
                       >
-                        <Trash2 className="h-5 w-5" />
+                        <Trash2 className="h-5 w-5 text-current" />
                       </Button>
                     )}
                   </div>
@@ -1757,45 +1939,7 @@ export default function ProfilePage() {
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                     </div>
                   ) : comments.length > 0 ? (
-                    comments.map((comment) => (
-                      <div key={comment.id} className="flex gap-3 group">
-                        <div className="relative h-10 w-10 overflow-hidden rounded-full flex-shrink-0">
-                          <Image
-                            src={comment.user?.profileImage || "/placeholder.svg?height=40&width=40"}
-                            alt={comment.user?.username || "User"}
-                            fill
-                            className="object-cover"
-                            sizes="40px"
-                          />
-                        </div>
-                        <div className="flex-1 space-y-2 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex flex-col gap-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-base text-gray-900 truncate">
-                                  {comment.user?.nickname || comment.user?.username}
-                                </span>
-                                <span className="text-sm text-gray-500 flex-shrink-0">
-                                  {formatDate(comment.createdAt)}
-                                </span>
-                              </div>
-                              <p className="text-base text-gray-800 leading-relaxed break-words">{comment.content}</p>
-                            </div>
-                            {comment.userId === session?.user?.id && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDeleteComment(comment.id)}
-                                className="h-8 w-8 rounded-full hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                                title="Delete comment"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))
+                    comments.map((comment) => renderComment(comment))
                   ) : (
                     <div className="text-center py-12 text-gray-500">
                       <MessageCircle className="h-12 w-12 mx-auto mb-3 text-gray-300" />
@@ -1826,7 +1970,7 @@ export default function ProfilePage() {
                       />
                       <div className="flex justify-end">
                         <Button
-                          onClick={handleSubmitComment}
+                          onClick={() => handleSubmitComment()}
                           disabled={!newComment.trim()}
                           size="sm"
                           className="rounded-full bg-blue-600 hover:bg-blue-700 text-white px-4 text-sm"
