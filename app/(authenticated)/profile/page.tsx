@@ -1011,7 +1011,6 @@ export default function ProfilePage() {
       toast({
         title: "Error",
         description: "Failed to delete thought. Please try again.",
-        variant: "destructive",
       })
     }
   }
@@ -1637,42 +1636,42 @@ export default function ProfilePage() {
         </TabsContent>
       </Tabs>
 
-      {/* Media Type Selection Dialog */}
+      {/* Single Media Button Dialog */}
       <Dialog open={isMediaTypeDialogOpen} onOpenChange={setIsMediaTypeDialogOpen}>
         <DialogContent className="mx-4 sm:mx-auto sm:max-w-[400px] w-[calc(100%-2rem)] rounded-2xl">
           <DialogHeader className="text-center">
             <DialogTitle className="text-lg sm:text-xl font-semibold text-blue-600">Create New Post</DialogTitle>
             <DialogDescription className="text-sm sm:text-base text-gray-600">
-              Choose what you'd like to share
+              Select an image or video to share
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-3 sm:gap-4 py-4 sm:py-6">
+          <div className="flex justify-center py-6">
             <Button
-              onClick={() => handleMediaTypeSelect("image")}
-              variant="outline"
-              className="h-16 sm:h-20 rounded-xl border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 transition-all group active:scale-95"
+              onClick={() => {
+                const input = document.createElement("input")
+                input.type = "file"
+                input.accept = "image/*,video/*"
+                input.onchange = (event) => {
+                  const syntheticEvent = {
+                    target: event.target,
+                    currentTarget: event.target,
+                  } as React.ChangeEvent<HTMLInputElement>
+                  handleMediaSelect(syntheticEvent)
+                }
+                input.click()
+                setIsMediaTypeDialogOpen(false)
+              }}
+              className="h-24 w-24 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 transition-all group active:scale-95 p-0 overflow-hidden"
             >
-              <div className="flex flex-col items-center gap-1 sm:gap-2">
-                <div className="h-6 w-6 sm:h-8 sm:w-8 rounded-full bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
-                  <Camera className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
-                </div>
-                <span className="font-medium text-blue-600 text-sm sm:text-base">Photo</span>
-                <span className="text-xs text-gray-500">Share a photo</span>
-              </div>
-            </Button>
-
-            <Button
-              onClick={() => handleMediaTypeSelect("video")}
-              variant="outline"
-              className="h-16 sm:h-20 rounded-xl border-2 border-purple-200 hover:border-purple-400 hover:bg-purple-50 transition-all group active:scale-95"
-            >
-              <div className="flex flex-col items-center gap-1 sm:gap-2">
-                <div className="h-6 w-6 sm:h-8 sm:w-8 rounded-full bg-purple-100 group-hover:bg-purple-200 flex items-center justify-center transition-colors">
-                  <Play className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600" />
-                </div>
-                <span className="font-medium text-purple-600 text-sm sm:text-base">Video</span>
-                <span className="text-xs text-gray-500">Share a video</span>
+              <div className="relative h-full w-full flex items-center justify-center">
+                <Image
+                  src="/images/media-button.png"
+                  alt="Select media"
+                  width={48}
+                  height={48}
+                  className="opacity-90 group-hover:opacity-100 transition-opacity"
+                />
               </div>
             </Button>
           </div>
@@ -1814,8 +1813,8 @@ export default function ProfilePage() {
                 <X className="h-5 w-5" />
               </Button>
 
-              {/* Media Section - Better mobile sizing */}
-              <div className="flex-1 relative overflow-hidden h-[40vh] sm:h-full">
+              {/* Media Section - Fixed height on mobile */}
+              <div className="flex-1 relative overflow-hidden h-[50vh] sm:h-full max-h-[50vh] sm:max-h-none">
                 {/* Blurred background */}
                 {(selectedPost.image || selectedPost.video) && (
                   <div className="absolute inset-0">
