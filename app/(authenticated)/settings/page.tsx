@@ -263,10 +263,10 @@ export default function SettingsPage() {
   }
 
   return (
-    <div>
+    <div className="relative">
       <h1 className="mb-6 text-2xl sm:text-3xl font-bold blue-text">Settings</h1>
 
-      <div className="space-y-6">
+      <div className="space-y-6 pb-20 md:pb-6">
         <Card className="premium-card">
           <CardHeader>
             <CardTitle className="premium-heading">Profile Information</CardTitle>
@@ -427,23 +427,6 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <div className="flex gap-4">
-          <Button
-            onClick={handleSaveProfile}
-            disabled={saving}
-            className="flex-1 rounded-full bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            {saving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              "Save Changes"
-            )}
-          </Button>
-        </div>
-
         <Card className="premium-card">
           <CardHeader>
             <CardTitle className="premium-heading">Account</CardTitle>
@@ -456,6 +439,26 @@ export default function SettingsPage() {
             </Button>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Floating Save Button */}
+      <div className="fixed bottom-20 left-0 right-0 z-[60] px-4 md:bottom-6 md:left-20 md:right-4">
+        <div className="mx-auto max-w-md md:ml-auto md:mr-0 md:max-w-xs">
+          <Button
+            onClick={handleSaveProfile}
+            disabled={saving}
+            className="w-full rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg backdrop-blur-sm border border-blue-100/20"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save Changes"
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   )
