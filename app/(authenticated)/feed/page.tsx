@@ -65,15 +65,17 @@ export default function FeedPage() {
   const [newComment, setNewComment] = useState("")
   const [commentsLoading, setCommentsLoading] = useState(false)
 
-  // Touch handling for swipe with smooth transitions
+  // Enhanced touch handling for TikTok-like smooth transitions
   const [touchStart, setTouchStart] = useState<{ y: number; time: number } | null>(null)
   const [touchCurrent, setTouchCurrent] = useState<number | null>(null)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [swipeOffset, setSwipeOffset] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const minSwipeDistance = 50
-  const swipeThreshold = 0.3 // 30% of screen height
+  const minSwipeDistance = 30
+  const swipeThreshold = 0.15 // 15% of screen height for easier swiping
+  const dampingFactor = 0.7 // Damping for over-scroll effect
 
   const fetchPosts = useCallback(async (cursor?: string, excludeIds: number[] = []) => {
     try {
@@ -160,32 +162,22 @@ export default function FeedPage() {
     }
   }, [posts, currentIndex, preloadVideo])
 
-  // Handle video playback with fade transitions
+  // Enhanced video playback with smooth transitions
   useEffect(() => {
     const currentPost = posts[currentIndex]
     if (!currentPost) return
 
-    // Fade out all videos except current
+    // Pause all videos except current
     Object.entries(videoRefs.current).forEach(([postId, video]) => {
       if (video && Number.parseInt(postId) !== currentPost.id) {
         video.pause()
         video.currentTime = 0
-        // Add fade out effect
-        const videoElement = document.querySelector(`[data-video-id="${postId}"]`) as HTMLVideoElement
-        if (videoElement) {
-          videoElement.style.opacity = "0.3"
-        }
       }
     })
 
-    // Play current video with fade in
+    // Play current video
     if (currentPost.video && videoRefs.current[currentPost.id]) {
       const video = videoRefs.current[currentPost.id]
-      const videoElement = document.querySelector(`[data-video-id="${currentPost.id}"]`) as HTMLVideoElement
-
-      if (videoElement) {
-        videoElement.style.opacity = "1"
-      }
 
       if (isPlaying) {
         video.play().catch(console.error)
@@ -194,7 +186,7 @@ export default function FeedPage() {
     }
   }, [currentIndex, posts, isPlaying, isMuted])
 
-  // Touch handlers with smooth swiping
+  // Enhanced touch handlers with TikTok-like feel
   const onTouchStart = (e: React.TouchEvent) => {
     if (isTransitioning) return
     setTouchStart({
@@ -202,6 +194,7 @@ export default function FeedPage() {
       time: Date.now(),
     })
     setTouchCurrent(e.targetTouches[0].clientY)
+    setIsDragging(true)
   }
 
   const onTouchMove = (e: React.TouchEvent) => {
@@ -212,7 +205,16 @@ export default function FeedPage() {
 
     const deltaY = currentY - touchStart.y
     const screenHeight = window.innerHeight
-    const offset = Math.max(-screenHeight, Math.min(screenHeight, deltaY))
+
+    // Apply damping for over-scroll effect
+    let offset = deltaY
+
+    // Add resistance when trying to scroll beyond bounds
+    if ((currentIndex === 0 && deltaY > 0) || (currentIndex === posts.length - 1 && deltaY < 0)) {
+      offset = deltaY * dampingFactor * 0.3 // Strong resistance at boundaries
+    } else {
+      offset = deltaY * dampingFactor
+    }
 
     setSwipeOffset(offset)
   }
@@ -225,9 +227,9 @@ export default function FeedPage() {
     const swipeDistance = Math.abs(deltaY)
     const swipeVelocity = swipeDistance / (Date.now() - touchStart.time)
 
-    // Determine if swipe should trigger navigation
+    // More sensitive swipe detection like TikTok
     const shouldNavigate =
-      swipeDistance > minSwipeDistance && (Math.abs(deltaY) > screenHeight * swipeThreshold || swipeVelocity > 0.5)
+      swipeDistance > minSwipeDistance && (Math.abs(deltaY) > screenHeight * swipeThreshold || swipeVelocity > 0.3)
 
     if (shouldNavigate) {
       setIsTransitioning(true)
@@ -244,14 +246,18 @@ export default function FeedPage() {
         setCurrentIndex((prev) => prev - 1)
       }
 
-      // Animate to final position
+      // Smooth transition to final position
       setTimeout(() => {
         setSwipeOffset(0)
         setIsTransitioning(false)
-      }, 300)
+        setIsDragging(false)
+      }, 400)
     } else {
-      // Snap back to original position
+      // Smooth snap back to original position
       setSwipeOffset(0)
+      setTimeout(() => {
+        setIsDragging(false)
+      }, 300)
     }
 
     setTouchStart(null)
@@ -381,14 +387,24 @@ export default function FeedPage() {
     const isActive = index === currentIndex
     const offset = (index - currentIndex) * window.innerHeight + swipeOffset
 
+    // Calculate opacity and scale for smooth transitions
+    const distance = Math.abs(index - currentIndex)
+    const opacity = distance === 0 ? 1 : Math.max(0.3, 1 - distance * 0.3)
+    const scale = distance === 0 ? 1 : Math.max(0.95, 1 - distance * 0.05)
+
     return (
       <div
         key={post.id}
         className="absolute inset-0 w-full h-full"
         style={{
-          transform: `translateY(${offset}px)`,
-          transition: isTransitioning ? "transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)" : "none",
-          zIndex: isActive ? 10 : 5,
+          transform: `translateY(${offset}px) scale(${scale})`,
+          transition: isTransitioning
+            ? "transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
+            : isDragging
+              ? "none"
+              : "transform 0.3s ease-out",
+          zIndex: isActive ? 10 : Math.max(1, 10 - distance),
+          opacity,
         }}
       >
         <div className="relative w-full h-full flex items-center justify-center bg-black">
@@ -400,11 +416,10 @@ export default function FeedPage() {
                 if (el) videoRefs.current[post.id] = el
               }}
               src={post.video}
-              className="w-full h-full object-cover transition-opacity duration-300"
+              className="w-full h-full object-cover"
               loop
               playsInline
               muted={isMuted}
-              style={{ opacity: isActive ? 1 : 0.3 }}
               onClick={() => setIsPlaying(!isPlaying)}
             />
           ) : post.image ? (
@@ -412,8 +427,7 @@ export default function FeedPage() {
               src={post.image || "/placeholder.svg"}
               alt="Post content"
               fill
-              className="object-cover transition-opacity duration-300"
-              style={{ opacity: isActive ? 1 : 0.3 }}
+              className="object-cover"
               priority={Math.abs(index - currentIndex) <= 1}
             />
           ) : null}
@@ -453,6 +467,8 @@ export default function FeedPage() {
                           post.user.profileImage ||
                           post.user.image ||
                           "/placeholder.svg?height=40&width=40" ||
+                          "/placeholder.svg" ||
+                          "/placeholder.svg" ||
                           "/placeholder.svg"
                         }
                         alt={post.user.username}
@@ -552,22 +568,6 @@ export default function FeedPage() {
           const actualIndex = Math.max(0, currentIndex - 1) + relativeIndex
           return renderPost(post, actualIndex)
         })}
-
-        {/* Progress indicator */}
-        <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-1 z-20">
-          {posts.slice(Math.max(0, currentIndex - 2), currentIndex + 3).map((_, idx) => {
-            const actualIndex = Math.max(0, currentIndex - 2) + idx
-            return (
-              <div
-                key={actualIndex}
-                className={cn(
-                  "w-1 h-8 rounded-full transition-all",
-                  actualIndex === currentIndex ? "bg-white" : "bg-white/30",
-                )}
-              />
-            )
-          })}
-        </div>
       </div>
 
       {/* Loading indicator */}
@@ -603,7 +603,9 @@ export default function FeedPage() {
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-sm">{comment.user?.nickname || comment.user?.username}</span>
+                      <span className="font-medium text-sm text-gray-800">
+                        {comment.user?.nickname || comment.user?.username}
+                      </span>
                       <span className="text-xs text-gray-500">{formatDate(comment.createdAt)}</span>
                     </div>
                     <p className="text-sm text-gray-800">{comment.content}</p>
@@ -635,7 +637,7 @@ export default function FeedPage() {
                   placeholder="Write a comment..."
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
-                  className="min-h-[60px] rounded-lg border-blue-200 resize-none text-sm"
+                  className="min-h-[60px] rounded-lg border-blue-200 resize-none text-sm text-gray-800"
                 />
                 <div className="flex justify-end">
                   <Button
