@@ -6,7 +6,7 @@ import { getEmbedding } from "@/src/lib/generateEmbeddings"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/src/lib/auth"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     // Get the current user session
     const session = await getServerSession(authOptions)
@@ -14,7 +14,11 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Fetch thoughts for the current user, ordered by creation date (newest first)
+    // Get userId from query params, fallback to current user
+    const { searchParams } = new URL(request.url)
+    const targetUserId = searchParams.get("userId") || session.user.id
+
+    // Fetch thoughts for the target user, ordered by creation date (newest first)
     const thoughts = await db
       .select({
         id: thoughtsTable.id,
@@ -23,7 +27,7 @@ export async function GET() {
         createdAt: thoughtsTable.createdAt,
       })
       .from(thoughtsTable)
-      .where(eq(thoughtsTable.userId, session.user.id))
+      .where(eq(thoughtsTable.userId, targetUserId))
       .orderBy(desc(thoughtsTable.createdAt))
 
     // Transform the data to match the expected format
