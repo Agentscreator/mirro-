@@ -23,7 +23,7 @@ export type RecommendedUser = {
   profileImage?: string | null // Added profileImage field
   tags: string[]
   similarity?: number
-  proximity?: number
+  proximity?: number | undefined
   score: number
   reason?: string | null
 }
@@ -49,43 +49,55 @@ type UserSummary = {
  */
 export async function getRecommendations(userId: string, page = 1, pageSize = 2): Promise<PaginatedRecommendations> {
   try {
-    // Always try to get both embedding-based and database recommendations
-    const embeddingUsers = await getEmbeddingBasedUsers(userId, pageSize * 2)
-    const databaseUsers = await getDatabaseRecommendations(userId, 1, pageSize * 2)
-
-    // Combine results with embedding users prioritized
-    const combinedUsers = [
-      ...embeddingUsers.map((user) => ({ ...user, hasEmbedding: true })),
-      ...databaseUsers.users
-        .filter((dbUser) => !embeddingUsers.some((embUser) => embUser.id === dbUser.id))
-        .map((user) => ({ ...user, hasEmbedding: false })),
-    ]
-
-    // Sort: embedding users first (by score), then database users (by score)
-    const sortedUsers = combinedUsers.sort((a, b) => {
-      // First priority: users with embeddings
-      if (a.hasEmbedding && !b.hasEmbedding) return -1
-      if (!a.hasEmbedding && b.hasEmbedding) return 1
-
-      // Second priority: score within each group
-      return b.score - a.score
-    })
-
-    // Apply pagination
+    // Get embedding-based recommendations first
+    const embeddingUsers = await getEmbeddingBasedUsers(userId, pageSize * 4)
+    
+    // Calculate pagination indices
     const startIdx = (page - 1) * pageSize
     const endIdx = startIdx + pageSize
-    const paginatedResults = sortedUsers.slice(startIdx, endIdx)
-
-    // Remove the hasEmbedding flag before returning
-    const finalResults = paginatedResults.map(({ hasEmbedding, ...user }) => user)
-
-    return {
-      users: finalResults,
-      hasMore: endIdx < sortedUsers.length,
-      nextPage: endIdx < sortedUsers.length ? page + 1 : null,
-      totalCount: sortedUsers.length,
-      currentPage: page,
+    
+    // If we have enough embedding users for this page, use only those
+    if (embeddingUsers.length > startIdx) {
+      // We have at least some embedding users for this page
+      const remainingNeeded = pageSize - Math.min(embeddingUsers.length - startIdx, pageSize)
+      
+      if (remainingNeeded <= 0) {
+        // We have enough embedding users for the full page
+        return {
+          users: embeddingUsers.slice(startIdx, endIdx),
+          hasMore: endIdx < embeddingUsers.length,
+          nextPage: endIdx < embeddingUsers.length ? page + 1 : null,
+          totalCount: embeddingUsers.length,
+          currentPage: page,
+        }
+      }
+      
+      // We need some database users to fill the page
+      const databaseUsers = await getDatabaseRecommendations(userId, 1, remainingNeeded * 2)
+      
+      // Filter out any database users that are already in embedding results
+      const existingUserIds = new Set(embeddingUsers.map(user => user.id))
+      const filteredDatabaseUsers = databaseUsers.users.filter(dbUser => !existingUserIds.has(dbUser.id))
+      
+      // Take embedding users for this page plus needed database users
+      const pageResults = [
+        ...embeddingUsers.slice(startIdx),
+        ...filteredDatabaseUsers.slice(0, remainingNeeded)
+      ]
+      
+      const totalResults = embeddingUsers.length + filteredDatabaseUsers.length
+      
+      return {
+        users: pageResults,
+        hasMore: pageResults.length === pageSize && (embeddingUsers.length > endIdx || filteredDatabaseUsers.length > remainingNeeded),
+        nextPage: pageResults.length === pageSize ? page + 1 : null,
+        totalCount: totalResults,
+        currentPage: page,
+      }
     }
+    
+    // If we have no embedding users for this page, use database recommendations
+    return await getDatabaseRecommendations(userId, page, pageSize)
   } catch (error) {
     console.error("Error getting recommendations:", error)
     // Fallback to database-only recommendations
@@ -180,31 +192,49 @@ async function getEmbeddingBasedUsers(userId: string, maxResults = 10): Promise<
       return []
     }
 
-    // Get the latest user embedding from your database
+    // Get all thoughts with embeddings for this user to check if they have any
+    const userThoughts = await db
+      .select()
+      .from(thoughtsTable)
+      .where(
+        and(
+          eq(thoughtsTable.userId, userId),
+          isNotNull(thoughtsTable.embedding),
+          isNotNull(thoughtsTable.content)
+        )
+      )
+      .limit(1)
+
+    // If user has no embeddings, return empty array
+    if (userThoughts.length === 0) {
+      return []
+    }
+
+    // Get the latest user embedding
     const userEmbedding = await getMostRecentUserEmbedding(userId)
 
     if (!userEmbedding || userEmbedding.length === 0) {
       return []
     }
 
-    // Query Pinecone for similar users
+    // Query Pinecone for similar users - get significantly more results
     const index = pineconeClient.index(process.env.PINECONE_INDEX_NAME!)
     const queryResponse = await index.query({
       vector: userEmbedding,
-      topK: maxResults * 2, // Query more than needed to account for filtering
+      topK: maxResults * 5, // Get 5x more results to ensure we have enough valid matches
       includeMetadata: true,
       filter: {
-        userId: { $ne: userId }, // Exclude the current user
+        userId: { $ne: userId },
       },
     })
 
-    // Get additional user data from database for the matched users
     const userIds = queryResponse.matches?.map((match) => match.metadata?.userId).filter(Boolean) || []
 
     if (userIds.length === 0) {
       return []
     }
 
+    // Get user details and also check which users have embeddings
     const userDetails = await db
       .select({
         id: usersTable.id,
@@ -212,6 +242,12 @@ async function getEmbeddingBasedUsers(userId: string, maxResults = 10): Promise<
         nickname: usersTable.nickname,
         image: usersTable.image,
         profileImage: usersTable.profileImage,
+        hasEmbeddings: sql<boolean>`EXISTS (
+          SELECT 1 FROM ${thoughtsTable}
+          WHERE ${thoughtsTable.userId} = ${usersTable.id}
+          AND ${thoughtsTable.embedding} IS NOT NULL
+          LIMIT 1
+        )`,
       })
       .from(usersTable)
       .where(sql`${usersTable.id} = ANY(${userIds})`)
@@ -219,29 +255,34 @@ async function getEmbeddingBasedUsers(userId: string, maxResults = 10): Promise<
     // Create a map for quick lookup
     const userDetailsMap = new Map(userDetails.map((user) => [user.id, user]))
 
-    // Process query results into recommendation format
-    const results =
-      queryResponse.matches
-        ?.map((match: ScoredPineconeRecord<RecordMetadata>) => {
-          const metadata = match.metadata || {}
-          const userDetail = userDetailsMap.get(metadata.userId)
+    // Process results, only including users that actually have embeddings
+    const results = (queryResponse.matches
+      ?.map((match: ScoredPineconeRecord<RecordMetadata>): RecommendedUser | null => {
+        const metadata = match.metadata || {}
+        const userDetail = userDetailsMap.get(metadata.userId)
+        
+        // Skip users without embeddings
+        if (!userDetail?.hasEmbeddings) {
+          return null
+        }
 
-          return {
-            id: metadata.userId,
-            username: userDetail?.username || metadata.username || `user${metadata.userId}`,
-            nickname: userDetail?.nickname || metadata.nickname || null,
-            image: userDetail?.image || null,
-            profileImage: userDetail?.profileImage || null,
-            tags: metadata.tags ? JSON.parse(metadata.tags) : [],
-            similarity: match.score ?? 0,
-            proximity: metadata.proximity || undefined,
-            score: calculateOverallScore(match.score ?? 0, metadata.proximity),
-            reason: null,
-          }
-        })
-        .filter(Boolean) || []
+        const similarity = match.score ?? 0
+        return {
+          id: metadata.userId,
+          username: userDetail.username,
+          nickname: userDetail.nickname || null,
+          image: userDetail.image || null,
+          profileImage: userDetail.profileImage || null,
+          tags: metadata.tags ? JSON.parse(metadata.tags) : [],
+          similarity: similarity,
+          proximity: metadata.proximity || undefined,
+          score: calculateOverallScore(similarity, metadata.proximity),
+          reason: null,
+        }
+      })
+      .filter((user): user is RecommendedUser => user !== null) || []) as RecommendedUser[]
 
-    // Sort by score and limit results
+    // Sort by score and return results
     return results.sort((a, b) => b.score - a.score).slice(0, maxResults)
   } catch (error) {
     console.error("Error getting embedding-based users:", error)
@@ -316,13 +357,13 @@ async function getDatabaseRecommendations(
     .from(usersTable)
     .where(
       and(
-        ne(usersTable.id, userId), // Exclude current user
+        ne(usersTable.id, userId),
         genderFilter,
         proximityFilter,
         sql`EXTRACT(YEAR FROM ${usersTable.dob}) BETWEEN ${minBirthYear} AND ${maxBirthYear}`,
       ),
     )
-    .limit(pageSize * 3) // Get more to rank and filter
+    .limit(pageSize * 3)
     .offset(offset)
 
   // Score matches based on common tags
@@ -346,16 +387,19 @@ async function getDatabaseRecommendations(
     const commonTagIds = userTagIds.filter((tagId) => matchTagIds.includes(tagId))
     const score = commonTagIds.length
 
-    scoredMatches.push({
+    const recommendedUser: RecommendedUser = {
       id: match.id,
       username: match.username,
       nickname: match.nickname,
-      image: match.image, // Use actual image from database
-      profileImage: match.profileImage, // Use actual profileImage from database
-      tags: matchTags.map((tag) => tag.tagName).slice(0, 5), // Limit displayed tags
+      image: match.image,
+      profileImage: match.profileImage,
+      tags: matchTags.map((tag) => tag.tagName).slice(0, 5),
       score,
-      reason: null, // Will be generated later if needed
-    })
+      similarity: score / Math.max(userTagIds.length, matchTagIds.length),
+      reason: null,
+    }
+
+    scoredMatches.push(recommendedUser)
   }
 
   // Sort by score (highest compatibility first)
@@ -831,13 +875,15 @@ async function getUserBasicInfo(userId: string) {
   }
 }
 
-function calculateOverallScore(similarity: number, proximity?: number): number {
-  // Your existing logic for calculating an overall score
+function calculateOverallScore(similarity: number, proximity?: number | undefined): number {
+  // If no proximity data, return similarity score
   if (proximity === undefined) return similarity
 
-  // Example: Weight similarity more than proximity
-  const proximityNormalized = 100 - Math.min(proximity, 100)
-  return similarity * 0.7 + (proximityNormalized / 100) * 0.3
+  // Normalize proximity to a 0-1 scale (0 being closest, 1 being farthest)
+  const proximityNormalized = Math.min(proximity, 100) / 100
+
+  // Weight similarity more heavily than proximity (70% similarity, 30% proximity)
+  return (similarity * 0.7) + ((1 - proximityNormalized) * 0.3)
 }
 
 // Export functions that might be used by other scripts

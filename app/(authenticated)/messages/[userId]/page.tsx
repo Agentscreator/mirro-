@@ -26,11 +26,18 @@ import { Chat, Channel, MessageList, Thread, Window, useChannelStateContext, use
 import { useStreamContext } from "@/components/providers/StreamProvider"
 import { useStreamVideo } from "@/components/providers/StreamVideoProvider"
 import { CallInterface } from "@/components/video/CallInterface"
-import type { Channel as StreamChannel } from "stream-chat"
-import type { Call, GetOrCreateCallRequest } from "@stream-io/video-react-sdk"
+import type { Event as StreamEvent, Channel as StreamChannel } from 'stream-chat'
+import type { StreamVideoClient, Call as VideoCall } from '@stream-io/video-react-sdk'
 import "stream-chat-react/dist/css/v2/index.css"
 import crypto from 'crypto'
 import type { MessageUIComponentProps } from "stream-chat-react"
+
+// Extend EventTypes to include our custom event
+declare module 'stream-chat' {
+  interface EventTypes {
+    'custom.call_status': string
+  }
+}
 
 // Simple hash function to create deterministic short IDs
 const createChannelId = (userId1: string, userId2: string): string => {
@@ -48,6 +55,24 @@ const createChannelId = (userId1: string, userId2: string): string => {
   return `dm_${hash}` // This will be exactly 35 characters (dm_ + 32 char hash)
 }
 
+// Define custom message data type
+interface CustomMessageData {
+  is_call: boolean
+  call_type?: string
+  target_user?: string
+  call_id?: string
+  status?: 'ringing' | 'connected' | 'ended'
+  caller_id?: string
+  participant_id?: string
+}
+
+// Extend Stream's message type
+declare module 'stream-chat' {
+  interface MessageData {
+    custom?: CustomMessageData
+  }
+}
+
 // Call Modal Component
 const CallModal = ({
   isOpen,
@@ -63,20 +88,25 @@ const CallModal = ({
   isIncoming?: boolean
 }) => {
   const { videoClient, isReady } = useStreamVideo()
-  const [call, setCall] = useState<Call | null>(null)
+  const [call, setCall] = useState<VideoCall | null>(null)
+  const [callStatus, setCallStatus] = useState<'ringing' | 'connected' | 'ended'>('ringing')
+  const { channel } = useChannelStateContext()
+  const { client } = useChatContext()
 
   useEffect(() => {
-    if (!isOpen || !videoClient || !isReady || !otherUser?.id) return
+    if (!isOpen || !videoClient || !isReady || !otherUser?.id || !channel) return
 
     const initializeCall = async () => {
       try {
         const callId = `${callType}_${Date.now()}`
         const call = videoClient.call(callType, callId)
 
-        const callData: GetOrCreateCallRequest = {
+        const callData: any = {
           data: {
             custom: {
               target_user: otherUser.id,
+              caller_id: client.userID,
+              call_status: 'ringing',
             },
           },
           ring: true,
@@ -86,7 +116,40 @@ const CallModal = ({
 
         if (!isIncoming) {
           await call.join()
+          // Send a call initiation message
+          await channel.sendMessage({
+            text: `Initiated ${callType} call`,
+            custom: {
+              is_call: true,
+              call_id: callId,
+              status: 'ringing',
+              caller_id: client.userID,
+              target_user: otherUser.id,
+              call_type: callType,
+            } as CustomMessageData,
+          })
         }
+
+        // Set up call event listeners
+        call.on('call.state.updated' as any, (event: any) => {
+          const state = event.call?.state
+          if (state?.status === 'connected') {
+            setCallStatus('connected')
+            // Notify through a message
+            channel.sendMessage({
+              text: `Call connected`,
+              custom: {
+                is_call: true,
+                call_id: callId,
+                status: 'connected',
+                participant_id: client.userID,
+              } as any,
+            })
+          } else if (state?.status === 'disconnected') {
+            setCallStatus('ended')
+            onClose()
+          }
+        })
 
         setCall(call)
       } catch (error) {
@@ -97,16 +160,170 @@ const CallModal = ({
 
     initializeCall()
 
-    return () => {
-      if (call) {
-        call.leave().catch(console.error)
+    // Listen for call status updates through messages
+    const handleCallStatus = (event: any) => {
+      if (event.type === 'message.new' && event.message?.custom) {
+        const customData = event.message.custom as any
+        if (customData.is_call) {
+          const { status, participant_id } = customData
+          if (status === 'connected' && participant_id !== client.userID) {
+            setCallStatus('connected')
+          } else if (status === 'ended') {
+            setCallStatus('ended')
+            onClose()
+          }
+        }
       }
     }
-  }, [isOpen, videoClient, isReady, otherUser?.id, callType, isIncoming])
 
-  if (!isOpen || !call) return null
+    channel.on('message.new', handleCallStatus)
 
-  return <CallInterface call={call} onClose={onClose} isIncoming={isIncoming} />
+    return () => {
+      if (call) {
+        // Send call ended message
+        channel.sendMessage({
+          text: `Call ended`,
+          custom: {
+            is_call: true,
+            call_id: call.id,
+            status: 'ended',
+            participant_id: client.userID,
+          } as any,
+        }).catch(console.error)
+        
+        call.leave().catch(console.error)
+      }
+      channel.off('message.new', handleCallStatus)
+    }
+  }, [isOpen, videoClient, isReady, otherUser?.id, channel, client.userID, callType, onClose])
+
+  const handleAnswer = async () => {
+    if (!call) return
+    try {
+      await call.join()
+      setCallStatus('connected')
+      // Send answer through message
+      await channel.sendMessage({
+        text: `Call answered`,
+        custom: {
+          is_call: true,
+          call_id: call.id,
+          status: 'connected',
+          participant_id: client.userID,
+        } as CustomMessageData,
+      })
+    } catch (error) {
+      console.error("Error answering call:", error)
+      onClose()
+    }
+  }
+
+  const handleDecline = async () => {
+    if (call) {
+      try {
+        // Send decline through message
+        await channel.sendMessage({
+          text: `Call declined`,
+          custom: {
+            is_call: true,
+            call_id: call.id,
+            status: 'ended',
+            participant_id: client.userID,
+          } as CustomMessageData,
+        })
+        await call.leave()
+      } catch (error) {
+        console.error("Error declining call:", error)
+      }
+    }
+    onClose()
+  }
+
+  const handleEndCall = async () => {
+    if (call) {
+      try {
+        // Send end call through message
+        await channel.sendMessage({
+          text: `Call ended`,
+          custom: {
+            is_call: true,
+            call_id: call.id,
+            status: 'ended',
+            participant_id: client.userID,
+          } as CustomMessageData,
+        })
+        await call.leave()
+      } catch (error) {
+        console.error("Error ending call:", error)
+      }
+    }
+    onClose()
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center">
+      <div className="bg-white rounded-3xl p-8 max-w-md w-full mx-4 text-center">
+        {/* User Avatar */}
+        <Avatar className="h-32 w-32 mx-auto mb-6 ring-4 ring-white shadow-xl">
+          <AvatarImage src={otherUser?.image || "/placeholder.svg"} />
+          <AvatarFallback className="bg-gradient-to-br from-sky-400 to-sky-500 text-white text-4xl font-semibold">
+            {otherUser?.name?.[0]?.toUpperCase() || "?"}
+          </AvatarFallback>
+        </Avatar>
+
+        {/* User Name */}
+        <h3 className="text-2xl font-semibold text-gray-900 mb-2">{otherUser?.name || "Unknown User"}</h3>
+
+        {/* Call Status */}
+        <p className="text-gray-600 mb-8">
+          {isIncoming && callStatus === 'ringing' && `Incoming ${callType} call...`}
+          {!isIncoming && callStatus === 'ringing' && `Calling...`}
+          {callStatus === 'connected' && `Connected`}
+          {callStatus === 'ended' && `Call ended`}
+        </p>
+
+        {/* Call Controls */}
+        <div className="flex justify-center gap-4">
+          {isIncoming && callStatus === 'ringing' && (
+            <>
+              <Button
+                onClick={handleDecline}
+                className="bg-red-500 hover:bg-red-600 text-white rounded-full p-4 h-16 w-16"
+              >
+                <PhoneOff className="h-6 w-6" />
+              </Button>
+              <Button
+                onClick={handleAnswer}
+                className="bg-green-500 hover:bg-green-600 text-white rounded-full p-4 h-16 w-16"
+              >
+                <Phone className="h-6 w-6" />
+              </Button>
+            </>
+          )}
+
+          {callStatus === 'connected' && (
+            <Button
+              onClick={handleEndCall}
+              className="bg-red-500 hover:bg-red-600 text-white rounded-full p-4 h-16 w-16"
+            >
+              <PhoneOff className="h-6 w-6" />
+            </Button>
+          )}
+
+          {!isIncoming && callStatus === 'ringing' && (
+            <Button
+              onClick={handleEndCall}
+              className="bg-red-500 hover:bg-red-600 text-white rounded-full p-4 h-16 w-16"
+            >
+              <PhoneOff className="h-6 w-6" />
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // Custom Channel Header for DM
@@ -674,6 +891,26 @@ const ErrorState = ({ error, onRetry }: { error: string; onRetry: () => void }) 
     </div>
   </div>
 )
+
+// Add this helper function at the top of the file after imports
+const findExistingChannel = async (client: any, otherUserId: string) => {
+  try {
+    // Query for DM channels with the other user
+    const filter = {
+      type: 'messaging',
+      member_count: 2,
+      members: { $in: [otherUserId] }
+    }
+    const sort = { last_message_at: -1 }
+    const channels = await client.queryChannels(filter, sort, { limit: 1 })
+    
+    // Return the first channel if found
+    return channels.length > 0 ? channels[0] : null
+  } catch (error) {
+    console.error('Error finding existing channel:', error)
+    return null
+  }
+}
 
 // Main DM Page Component
 export default function DirectMessagePage() {

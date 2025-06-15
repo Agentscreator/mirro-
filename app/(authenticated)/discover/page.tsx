@@ -418,8 +418,8 @@ export default function DiscoverPage() {
               <div className="flex justify-center pt-2">
                 <Button
                   onClick={loadMore}
-                  variant="outline"
-                  className="rounded-full border-blue-200 hover:bg-blue-50"
+                  variant="secondary"
+                  className="rounded-full border-2 border-blue-200 bg-white text-blue-600 hover:bg-blue-50"
                   disabled={loadingMore}
                 >
                   {loadingMore ? <TypingAnimation /> : "Load more"}
