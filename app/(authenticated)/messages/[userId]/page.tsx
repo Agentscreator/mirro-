@@ -22,12 +22,15 @@ import {
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Chat, Channel, MessageList, Thread, Window, useChannelStateContext } from "stream-chat-react"
+import { Chat, Channel, MessageList, Thread, Window, useChannelStateContext, useChatContext } from "stream-chat-react"
 import { useStreamContext } from "@/components/providers/StreamProvider"
+import { useStreamVideo } from "@/components/providers/StreamVideoProvider"
+import { CallInterface } from "@/components/video/CallInterface"
 import type { Channel as StreamChannel } from "stream-chat"
-import { isCallInitiatedEvent, hasUserData } from "@/types/streamm"
+import type { Call, GetOrCreateCallRequest } from "@stream-io/video-react-sdk"
 import "stream-chat-react/dist/css/v2/index.css"
 import crypto from 'crypto'
+import type { MessageUIComponentProps } from "stream-chat-react"
 
 // Simple hash function to create deterministic short IDs
 const createChannelId = (userId1: string, userId2: string): string => {
@@ -59,135 +62,51 @@ const CallModal = ({
   otherUser: any
   isIncoming?: boolean
 }) => {
-  const [isCallActive, setIsCallActive] = useState(false)
-  const [isMuted, setIsMuted] = useState(false)
-  const [isVideoEnabled, setIsVideoEnabled] = useState(callType === "video")
-  const [callDuration, setCallDuration] = useState(0)
+  const { videoClient, isReady } = useStreamVideo()
+  const [call, setCall] = useState<Call | null>(null)
 
   useEffect(() => {
-    let interval: NodeJS.Timeout
-    if (isCallActive) {
-      interval = setInterval(() => {
-        setCallDuration((prev) => prev + 1)
-      }, 1000)
+    if (!isOpen || !videoClient || !isReady || !otherUser?.id) return
+
+    const initializeCall = async () => {
+      try {
+        const callId = `${callType}_${Date.now()}`
+        const call = videoClient.call(callType, callId)
+
+        const callData: GetOrCreateCallRequest = {
+          data: {
+            custom: {
+              target_user: otherUser.id,
+            },
+          },
+          ring: true,
+        }
+
+        await call.getOrCreate(callData)
+
+        if (!isIncoming) {
+          await call.join()
+        }
+
+        setCall(call)
+      } catch (error) {
+        console.error("Error initializing call:", error)
+        onClose()
+      }
     }
-    return () => clearInterval(interval)
-  }, [isCallActive])
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
-  }
+    initializeCall()
 
-  const handleAnswer = () => {
-    setIsCallActive(true)
-    // Here you would integrate with Stream Call SDK
-    // call.join() or similar
-  }
+    return () => {
+      if (call) {
+        call.leave().catch(console.error)
+      }
+    }
+  }, [isOpen, videoClient, isReady, otherUser?.id, callType, isIncoming])
 
-  const handleDecline = () => {
-    onClose()
-    // Here you would reject the call
-    // call.reject() or similar
-  }
+  if (!isOpen || !call) return null
 
-  const handleEndCall = () => {
-    setIsCallActive(false)
-    onClose()
-    // Here you would end the call
-    // call.leave() or similar
-  }
-
-  if (!isOpen) return null
-
-  return (
-    <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center">
-      <div className="bg-white rounded-3xl p-8 max-w-md w-full mx-4 text-center">
-        {/* User Avatar */}
-        <Avatar className="h-32 w-32 mx-auto mb-6 ring-4 ring-white shadow-xl">
-          <AvatarImage src={otherUser?.image || "/placeholder.svg"} />
-          <AvatarFallback className="bg-gradient-to-br from-sky-400 to-sky-500 text-white text-4xl font-semibold">
-            {otherUser?.name?.[0]?.toUpperCase() || "?"}
-          </AvatarFallback>
-        </Avatar>
-
-        {/* User Name */}
-        <h3 className="text-2xl font-semibold text-gray-900 mb-2">{otherUser?.name || "Unknown User"}</h3>
-
-        {/* Call Status */}
-        <p className="text-gray-600 mb-8">
-          {isIncoming && !isCallActive && `Incoming ${callType} call...`}
-          {!isIncoming && !isCallActive && `Calling...`}
-          {isCallActive && formatDuration(callDuration)}
-        </p>
-
-        {/* Video Area (for video calls) */}
-        {callType === "video" && isCallActive && (
-          <div className="bg-gray-900 rounded-2xl h-48 mb-6 flex items-center justify-center">
-            <p className="text-white">Video call area</p>
-            {/* Here you would render the Stream Video components */}
-          </div>
-        )}
-
-        {/* Call Controls */}
-        <div className="flex justify-center gap-4">
-          {isIncoming && !isCallActive && (
-            <>
-              <Button
-                onClick={handleDecline}
-                className="bg-red-500 hover:bg-red-600 text-white rounded-full p-4 h-16 w-16"
-              >
-                <PhoneOff className="h-6 w-6" />
-              </Button>
-              <Button
-                onClick={handleAnswer}
-                className="bg-green-500 hover:bg-green-600 text-white rounded-full p-4 h-16 w-16"
-              >
-                <Phone className="h-6 w-6" />
-              </Button>
-            </>
-          )}
-
-          {isCallActive && (
-            <>
-              <Button
-                onClick={() => setIsMuted(!isMuted)}
-                className={`${isMuted ? "bg-red-500 hover:bg-red-600" : "bg-gray-500 hover:bg-gray-600"} text-white rounded-full p-3 h-12 w-12`}
-              >
-                {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-              </Button>
-
-              {callType === "video" && (
-                <Button
-                  onClick={() => setIsVideoEnabled(!isVideoEnabled)}
-                  className={`${!isVideoEnabled ? "bg-red-500 hover:bg-red-600" : "bg-gray-500 hover:bg-gray-600"} text-white rounded-full p-3 h-12 w-12`}
-                >
-                  {isVideoEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
-                </Button>
-              )}
-
-              <Button
-                onClick={handleEndCall}
-                className="bg-red-500 hover:bg-red-600 text-white rounded-full p-3 h-12 w-12"
-              >
-                <PhoneOff className="h-5 w-5" />
-              </Button>
-            </>
-          )}
-
-          {!isIncoming && !isCallActive && (
-            <Button
-              onClick={handleEndCall}
-              className="bg-red-500 hover:bg-red-600 text-white rounded-full p-4 h-16 w-16"
-            >
-              <PhoneOff className="h-6 w-6" />
-            </Button>
-          )}
-        </div>
-      </div>
-    </div>
-  )
+  return <CallInterface call={call} onClose={onClose} isIncoming={isIncoming} />
 }
 
 // Custom Channel Header for DM
@@ -220,10 +139,11 @@ const DMChannelHeader = ({
     try {
       // Send call initiation event through Stream Chat
       await channel.sendEvent({
-        type: "message.new", // Use a supported event type
-        call_initiated: true,
-        call_type: callType,
-        target_user: otherUser?.id,
+        type: "custom.call",
+        custom: {
+          call_type: callType,
+          target_user: otherUser?.id,
+        },
       } as any)
 
       // Open call modal
@@ -232,16 +152,6 @@ const DMChannelHeader = ({
         callType,
         isIncoming: false,
       })
-
-      // Here you would integrate with Stream Call SDK
-      // const call = client.call('default', `call_${channel.id}`)
-      // await call.getOrCreate({
-      //   data: {
-      //     created_by_id: client.userID,
-      //     members: [{ user_id: client.userID }, { user_id: otherUser.id }],
-      //   },
-      // })
-      // await call.join({ create: true })
     } catch (error) {
       console.error("Error initiating call:", error)
       alert("Failed to start call. Please try again.")
@@ -253,23 +163,21 @@ const DMChannelHeader = ({
     if (!channel) return
 
     const handleCallEvent = (event: any) => {
-      // Use type guards to check if this is a call initiation event
-      if (isCallInitiatedEvent(event) && hasUserData(event) && event.user.id !== client?.user?.id) {
+      if (event.type === "custom.call" && event.user?.id !== client?.user?.id) {
         setCallModal({
           isOpen: true,
-          callType: (event as any).call_type || "audio",
+          callType: event.custom?.call_type || "audio",
           isIncoming: true,
         })
       }
     }
 
-    // Listen for message events that might contain call data
-    channel.on("message.new" as any, handleCallEvent)
+    channel.on("custom.call" as any, handleCallEvent)
 
     return () => {
-      channel.off("message.new" as any, handleCallEvent)
+      channel.off("custom.call" as any, handleCallEvent)
     }
-  }, [channel, client])
+  }, [channel, client?.user?.id])
 
   return (
     <>
@@ -428,6 +336,7 @@ const DMMessageInput = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { channel } = useChannelStateContext()
+  const { client } = useChatContext()
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -453,16 +362,34 @@ const DMMessageInput = () => {
         const streamAttachments = await Promise.all(
           attachments.map(async (file) => {
             const isImage = file.type.startsWith("image/")
+            const isVideo = file.type.startsWith("video/")
+            const isAudio = file.type.startsWith("audio/")
 
-            return {
-              type: file.type,
-              title: file.name,
-              file_size: file.size,
-              mime_type: file.type,
-              asset_url: URL.createObjectURL(file),
-              image_url: isImage ? URL.createObjectURL(file) : undefined,
+            try {
+              // Use the appropriate upload method based on file type
+              let response
+              if (isImage) {
+                response = await channel.sendImage(file, 'upload-' + file.name)
+              } else {
+                response = await channel.sendFile(file, 'upload-' + file.name)
+              }
+
+              // Return the correct attachment structure based on file type
+              return {
+                type: isImage ? "image" : isVideo ? "video" : isAudio ? "audio" : "file",
+                asset_url: response.file,
+                thumb_url: isImage ? response.file : undefined,
+                title: file.name,
+                file_size: file.size,
+                mime_type: file.type,
+                // For videos, add duration if available
+                duration: isVideo && file instanceof File ? await getVideoDuration(file) : undefined,
+              }
+            } catch (uploadError) {
+              console.error("Error uploading file:", uploadError)
+              throw uploadError
             }
-          }),
+          })
         )
 
         messageData.attachments = streamAttachments
@@ -474,7 +401,21 @@ const DMMessageInput = () => {
       setAttachments([])
     } catch (error) {
       console.error("Error sending message:", error)
+      alert("Failed to send message. Please try again.")
     }
+  }
+
+  // Helper function to get video duration
+  const getVideoDuration = (file: File): Promise<number> => {
+    return new Promise((resolve) => {
+      const video = document.createElement("video")
+      video.preload = "metadata"
+      video.onloadedmetadata = () => {
+        window.URL.revokeObjectURL(video.src)
+        resolve(video.duration)
+      }
+      video.src = URL.createObjectURL(file)
+    })
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -526,22 +467,44 @@ const DMMessageInput = () => {
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
               {attachments.map((file, index) => (
-                <div key={index} className="relative bg-white rounded-lg p-1 border border-sky-100 shadow-sm">
-                  <div className="flex items-center gap-2 max-w-[150px]">
+                <div key={index} className="relative bg-white rounded-lg p-2 border border-sky-100 shadow-sm">
+                  <div className="flex items-center gap-2 max-w-[200px]">
                     {file.type.startsWith("image/") ? (
-                      <img
-                        src={URL.createObjectURL(file) || "/placeholder.svg"}
-                        alt={file.name}
-                        className="h-10 w-10 object-cover rounded"
-                      />
+                      <div className="relative w-16 h-16 rounded overflow-hidden">
+                        <img
+                          src={URL.createObjectURL(file)}
+                          alt={file.name}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ) : file.type.startsWith("video/") ? (
+                      <div className="relative w-16 h-16 rounded overflow-hidden bg-sky-50 flex items-center justify-center">
+                        <video
+                          src={URL.createObjectURL(file)}
+                          className="h-full w-full object-cover"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                          <Video className="h-6 w-6 text-white" />
+                        </div>
+                      </div>
+                    ) : file.type.startsWith("audio/") ? (
+                      <div className="h-16 w-16 bg-sky-50 rounded flex items-center justify-center">
+                        <Volume2 className="h-6 w-6 text-sky-500" />
+                      </div>
                     ) : (
-                      <div className="h-10 w-10 bg-sky-100 rounded flex items-center justify-center">
-                        <Paperclip className="h-4 w-4 text-sky-500" />
+                      <div className="h-16 w-16 bg-sky-50 rounded flex items-center justify-center">
+                        <Paperclip className="h-6 w-6 text-sky-500" />
                       </div>
                     )}
-                    <span className="text-xs truncate">{file.name}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-sky-900 truncate">{file.name}</p>
+                      <p className="text-xs text-sky-500">
+                        {(file.size / 1024 / 1024).toFixed(1)} MB
+                      </p>
+                    </div>
                   </div>
                   <button
+                    type="button"
                     className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center"
                     onClick={() => removeAttachment(index)}
                   >
@@ -556,11 +519,129 @@ const DMMessageInput = () => {
         <Button
           type="submit"
           disabled={!text.trim() && attachments.length === 0}
-          className="bg-sky-500 hover:bg-sky-600 text-white p-2 md:p-4 rounded-full mb-1 disabled:opacity-30 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 flex-shrink-0"
+          className="bg-sky-500 hover:bg-sky-600 text-white p-3 md:p-4 rounded-full mb-1 disabled:opacity-30 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 flex-shrink-0"
         >
           <Send className="h-4 w-4 md:h-5 md:w-5" />
         </Button>
       </form>
+    </div>
+  )
+}
+
+// Update the CustomMessageUI component
+const CustomMessageUI = (props: MessageUIComponentProps) => {
+  const { message } = props
+
+  if (!message) {
+    return null
+  }
+
+  // If there's text, we should show it
+  const shouldRenderText = message.text?.trim()
+  const hasAttachments = message.attachments && message.attachments.length > 0
+
+  // If there are no attachments and no text, return null
+  if (!hasAttachments && !shouldRenderText) {
+    return null
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {/* Render text if present */}
+      {shouldRenderText && (
+        <div className="text-sm">{message.text}</div>
+      )}
+
+      {/* Render attachments if present */}
+      {hasAttachments && (
+        <div className="flex flex-col gap-2">
+          {(message.attachments || []).map((attachment: any, index: number) => {
+            // For images
+            if (attachment.type === "image" || attachment.image_url || attachment.thumb_url) {
+              const imageUrl = attachment.image_url || attachment.asset_url || attachment.thumb_url
+              return (
+                <div key={index} className="relative group">
+                  <img 
+                    src={imageUrl} 
+                    alt={attachment.title || "Image"} 
+                    className="rounded-xl max-h-[300px] w-auto object-contain cursor-pointer hover:opacity-95 transition-opacity"
+                    onClick={() => window.open(imageUrl, '_blank')}
+                  />
+                  <div className="absolute bottom-2 left-2 bg-black/50 px-2 py-1 rounded text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                    {attachment.title}
+                  </div>
+                </div>
+              )
+            }
+            
+            // For videos
+            if (attachment.type === "video" || attachment.mime_type?.startsWith("video/")) {
+              const videoUrl = attachment.asset_url
+              return (
+                <div key={index} className="relative group">
+                  <video 
+                    controls 
+                    className="rounded-xl max-h-[300px] w-auto"
+                    preload="metadata"
+                  >
+                    <source src={videoUrl} type={attachment.mime_type} />
+                    Your browser does not support the video tag.
+                  </video>
+                  <div className="absolute bottom-2 left-2 bg-black/50 px-2 py-1 rounded text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                    {attachment.title}
+                  </div>
+                </div>
+              )
+            }
+            
+            // For audio
+            if (attachment.type === "audio" || attachment.mime_type?.startsWith("audio/")) {
+              return (
+                <div key={index} className="bg-white/80 rounded-xl p-3">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-8 w-8 bg-sky-50 rounded-lg flex items-center justify-center">
+                      <Volume2 className="h-4 w-4 text-sky-500" />
+                    </div>
+                    <span className="text-sm font-medium text-sky-900">{attachment.title}</span>
+                  </div>
+                  <audio 
+                    controls 
+                    className="w-full"
+                    preload="metadata"
+                  >
+                    <source src={attachment.asset_url} type={attachment.mime_type} />
+                    Your browser does not support the audio tag.
+                  </audio>
+                </div>
+              )
+            }
+            
+            // For other file types
+            return (
+              <div key={index} className="str-chat__message-attachment--file">
+                <a 
+                  href={attachment.asset_url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="flex items-center gap-3 p-3 rounded-xl bg-white/80 hover:bg-white hover:shadow-md transition-all duration-200"
+                >
+                  <div className="h-10 w-10 bg-sky-50 rounded-lg flex items-center justify-center">
+                    <Paperclip className="h-5 w-5 text-sky-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-sky-900 truncate">
+                      {attachment.title}
+                    </p>
+                    <p className="text-xs text-sky-500">
+                      {(attachment.file_size / 1024 / 1024).toFixed(1)} MB
+                    </p>
+                  </div>
+                </a>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -729,7 +810,7 @@ export default function DirectMessagePage() {
     <div className="flex h-[100dvh] bg-gradient-to-br from-sky-50/30 via-white to-sky-50/30 overflow-hidden">
       <Chat client={client}>
         <div className="flex-1 flex flex-col h-full overflow-hidden">
-          <Channel channel={channel}>
+          <Channel channel={channel} Message={CustomMessageUI}>
             <Window>
               <DMChannelHeader
                 otherUser={otherUser}
@@ -754,11 +835,13 @@ export default function DirectMessagePage() {
       <style
         dangerouslySetInnerHTML={{
           __html: `
-            .str-chat__main-panel {
-              height: 100%;
-              background: linear-gradient(135deg, rgba(240, 249, 255, 0.3) 0%, rgba(255, 255, 255, 1) 50%, rgba(240, 249, 255, 0.3) 100%);
+            .str-chat {
+              --str-chat__primary-color: #0ea5e9;
+              --str-chat__active-color: #0284c7;
+              --str-chat__disabled-color: #94a3b8;
+              --str-chat__border-radius-circle: 9999px;
             }
-            
+
             .str-chat__message-list {
               padding: 2rem;
               background: transparent;
@@ -766,10 +849,19 @@ export default function DirectMessagePage() {
             
             .str-chat__message-list-scroll {
               height: 100%;
+              padding-bottom: 0 !important;
             }
             
             .str-chat__message-simple {
               margin-bottom: 1.5rem;
+              display: flex;
+              flex-direction: column;
+            }
+
+            .str-chat__message-simple-wrapper {
+              display: flex;
+              align-items: flex-end;
+              gap: 1rem;
             }
             
             .str-chat__message-simple__content {
@@ -785,9 +877,16 @@ export default function DirectMessagePage() {
 
             .str-chat__message-simple__content:hover {
               transform: translateY(-1px);
-
+            }
+            
+            .str-chat__message-simple--me {
+              align-items: flex-end;
             }
 
+            .str-chat__message-simple--me .str-chat__message-simple-wrapper {
+              flex-direction: row-reverse;
+            }
+            
             .str-chat__message-simple--me .str-chat__message-simple__content {
               background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
               color: white;
@@ -804,13 +903,19 @@ export default function DirectMessagePage() {
               line-height: 1.4;
               margin: 0;
               font-weight: 400;
+              color: #0f172a;
+            }
+            
+            .str-chat__message-simple--me .str-chat__message-simple__text {
+              color: white;
             }
             
             .str-chat__avatar {
               width: 2.5rem;
               height: 2.5rem;
-              margin-right: 0.75rem;
+              margin: 0;
               border: 2px solid rgba(14, 165, 233, 0.1);
+              flex-shrink: 0;
             }
             
             .str-chat__message-simple__actions {
@@ -828,9 +933,13 @@ export default function DirectMessagePage() {
             
             .str-chat__message-timestamp {
               font-size: 0.75rem;
-              color: #0ea5e9;
+              color: #64748b;
               margin-top: 0.5rem;
               font-weight: 500;
+            }
+
+            .str-chat__message-simple--me .str-chat__message-timestamp {
+              color: #0ea5e9;
             }
             
             .str-chat__message-simple__status {
@@ -842,63 +951,25 @@ export default function DirectMessagePage() {
               height: 1rem;
               color: #0ea5e9;
             }
-            
-            .str-chat__thread {
-              border-left: 1px solid rgba(14, 165, 233, 0.1);
-              background: rgba(255, 255, 255, 0.95);
-              backdrop-filter: blur(20px);
-            }
-            
-            .str-chat__message-list-scroll {
-              scroll-behavior: smooth;
-            }
-            
-            .str-chat__message-list-scroll::-webkit-scrollbar {
-              width: 6px;
-            }
-            
-            .str-chat__message-list-scroll::-webkit-scrollbar-track {
-              background: rgba(240, 249, 255, 0.5);
-              border-radius: 3px;
-            }
-            
-            .str-chat__message-list-scroll::-webkit-scrollbar-thumb {
-              background: linear-gradient(135deg, #0ea5e9, #0284c7);
-              border-radius: 3px;
-            }
-            
-            .str-chat__message-list-scroll::-webkit-scrollbar-thumb:hover {
-              background: linear-gradient(135deg, #0284c7, #0369a1);
-            }
-            
-            @keyframes slideInUp {
-              from {
-                opacity: 0;
-                transform: translateY(20px) scale(0.95);
-              }
-              to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-              }
-            }
-            
-            .str-chat__message-simple {
-              animation: slideInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+
+            .str-chat__message-attachment {
+              margin-top: 0.5rem;
             }
 
-            @keyframes fadeIn {
-              from {
-                opacity: 0;
-              }
-              to {
-                opacity: 1;
-              }
+            .str-chat__message-attachment--image {
+              border-radius: 1rem;
+              overflow: hidden;
             }
 
-            .str-chat__message-list {
-              animation: fadeIn 0.6s ease-out;
+            .str-chat__message-attachment--image img {
+              border-radius: 1rem;
+              transition: transform 0.2s;
             }
-            
+
+            .str-chat__message-attachment--image img:hover {
+              transform: scale(1.02);
+            }
+
             @media (max-width: 768px) {
               .str-chat__message-simple__content {
                 max-width: 85%;
@@ -906,63 +977,9 @@ export default function DirectMessagePage() {
               
               .str-chat__message-list {
                 padding: 1rem;
-                padding-bottom: 120px !important; /* Account for fixed message input */
-              }
-              
-              .str-chat__main-panel {
-                height: 100dvh !important;
-                display: flex !important;
-                flex-direction: column !important;
-                padding-bottom: 0 !important;
-              }
-              
-              .str-chat__channel {
-                height: 100% !important;
-                display: flex !important;
-                flex-direction: column !important;
-              }
-              
-              .str-chat__message-list-scroll {
-                padding-bottom: 120px !important;
               }
             }
-
-            .str-chat__message-input {
-              display: block !important;
-              position: relative !important;
-              bottom: auto !important;
-              left: auto !important;
-              right: auto !important;
-              width: 100% !important;
-              z-index: 10 !important;
-            }
-
-            .str-chat__message-input-wrapper {
-              display: block !important;
-              position: relative !important;
-              width: 100% !important;
-            }
-
-            @media (max-width: 768px) {
-              .str-chat__main-panel {
-                height: 100dvh !important;
-                display: flex !important;
-                flex-direction: column !important;
-              }
-              
-              .str-chat__channel {
-                height: 100% !important;
-                display: flex !important;
-                flex-direction: column !important;
-              }
-              
-              .str-chat__message-list {
-                flex: 1 !important;
-                min-height: 0 !important;
-                padding: 1rem !important;
-              }
-            }
-          `,
+          `
         }}
       />
     </div>

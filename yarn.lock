@@ -1772,7 +1772,7 @@
     i18next "^23.5.1"
     rxjs "~7.8.1"
 
-"@stream-io/video-react-sdk@^1.18.1":
+"@stream-io/video-react-sdk@^1.18.4":
   version "1.18.4"
   resolved "https://registry.npmmirror.com/@stream-io/video-react-sdk/-/video-react-sdk-1.18.4.tgz#38369b433d6ace0816ec46ce025a4e7e891885c7"
   integrity sha512-LOUBbvCUwzCubJj6aNhbUxY9ei6GD9g3FP/KS8aewZ/aCZqchvVX0yKrwVPRgn+piqMzhkWhyVj2c0EzesQXEA==

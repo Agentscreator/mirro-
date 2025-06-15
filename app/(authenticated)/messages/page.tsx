@@ -227,7 +227,7 @@ const CustomChannelPreview = ({ channel, setActiveChannel, watchers }: ChannelPr
       <div className="relative mr-4">
         <Avatar className="h-14 w-14 ring-2 ring-sky-100/50 ring-offset-2 transition-all duration-300 group-hover:ring-sky-200">
           <AvatarImage src={otherMember?.user?.image || "/placeholder.svg"} />
-          <AvatarFallback className="bg-gradient-to-br from-sky-400 to-sky-500 text-white font-semibold text-lg">
+          <AvatarFallback className="bg-gradient-to-br from-sky-400 to-sky-500 text-white font-semibold text-lg opacity-0 animate-fadeIn">
             {otherMember?.user?.name?.[0]?.toUpperCase() || "?"}
           </AvatarFallback>
         </Avatar>
@@ -293,12 +293,14 @@ const CustomChannelHeader = ({ onBack }: { onBack?: () => void }) => {
 
     try {
       // Send call initiation event through Stream Chat
-      await channel.sendEvent({
-        type: "message.new", // Use a supported event type
-        call_initiated: true,
-        call_type: callType,
-        target_user: otherMember?.user?.id,
-      } as any)
+      await channel.sendMessage({
+        text: `Initiated ${callType} call`,
+        custom: {
+          is_call: true,
+          call_type: callType,
+          target_user: otherMember?.user?.id,
+        },
+      })
 
       // Open call modal
       setCallModal({
@@ -316,24 +318,22 @@ const CustomChannelHeader = ({ onBack }: { onBack?: () => void }) => {
   useEffect(() => {
     if (!channel) return
 
-    const handleCallEvent = (event: any) => {
-      // Use type guards to check if this is a call initiation event
-      if (event.call_initiated && event.user?.id !== client?.user?.id) {
+    const handleNewMessage = (event: any) => {
+      if (event?.message?.custom?.is_call && event.user?.id !== client?.user?.id) {
         setCallModal({
           isOpen: true,
-          callType: event.call_type || "audio",
+          callType: event.message.custom.call_type || "audio",
           isIncoming: true,
         })
       }
     }
 
-    // Listen for message events that might contain call data
-    channel.on("message.new" as any, handleCallEvent)
+    channel.on("message.new", handleNewMessage)
 
     return () => {
-      channel.off("message.new" as any, handleCallEvent)
+      channel.off("message.new", handleNewMessage)
     }
-  }, [channel, client])
+  }, [channel, client?.user?.id])
 
   return (
     <>
@@ -514,16 +514,32 @@ const CustomMessageInput = () => {
         const streamAttachments = await Promise.all(
           attachments.map(async (file) => {
             const isImage = file.type.startsWith("image/")
+            const isVideo = file.type.startsWith("video/")
+            const isAudio = file.type.startsWith("audio/")
 
-            return {
-              type: file.type,
-              title: file.name,
-              file_size: file.size,
-              mime_type: file.type,
-              asset_url: URL.createObjectURL(file),
-              image_url: isImage ? URL.createObjectURL(file) : undefined,
+            try {
+              // Use the appropriate upload method based on file type
+              let response
+              if (isImage) {
+                response = await channel.sendImage(file, 'upload-' + file.name)
+              } else {
+                response = await channel.sendFile(file, 'upload-' + file.name)
+              }
+
+              // Return the correct attachment structure based on file type
+              return {
+                type: isImage ? "image" : isVideo ? "video" : isAudio ? "audio" : "file",
+                asset_url: response.file,
+                thumb_url: isImage ? response.file : undefined,
+                title: file.name,
+                file_size: file.size,
+                mime_type: file.type,
+              }
+            } catch (uploadError) {
+              console.error("Error uploading file:", uploadError)
+              throw uploadError
             }
-          }),
+          })
         )
 
         messageData.attachments = streamAttachments
@@ -535,6 +551,7 @@ const CustomMessageInput = () => {
       setAttachments([])
     } catch (error) {
       console.error("Error sending message:", error)
+      alert("Failed to send message. Please try again.")
     }
   }
 
@@ -1098,17 +1115,17 @@ export default function MessagesPage() {
                             ? result.data.user?.image 
                             : result.type === "channel" 
                             ? (Object.values(result.data.state.members || {}) as ChannelMemberResponse[]).find(
-                                member => member.user?.id !== client.userID
+                                (member: ChannelMemberResponse) => member.user?.id !== client.userID
                               )?.user?.image
-                            : result.data.image
+                            : result.data.image || "/placeholder.svg"
                         } 
                       />
-                      <AvatarFallback className="bg-sky-100 text-sky-500">
+                      <AvatarFallback className="bg-sky-100 text-sky-500 opacity-0 animate-fadeIn">
                         {result.type === "message"
                           ? result.data.user?.name?.[0]?.toUpperCase() || "?"
                           : result.type === "channel"
                           ? (Object.values(result.data.state.members || {}) as ChannelMemberResponse[]).find(
-                              member => member.user?.id !== client.userID
+                              (member: ChannelMemberResponse) => member.user?.id !== client.userID
                             )?.user?.name?.[0]?.toUpperCase() || "?"
                           : result.data.name?.[0]?.toUpperCase() || "?"}
                       </AvatarFallback>
@@ -1119,7 +1136,7 @@ export default function MessagesPage() {
                           ? result.data.user?.name || "Unknown"
                           : result.type === "channel"
                           ? (Object.values(result.data.state.members || {}) as ChannelMemberResponse[]).find(
-                              member => member.user?.id !== client.userID
+                              (member: ChannelMemberResponse) => member.user?.id !== client.userID
                             )?.user?.name || "Unknown"
                           : result.data.name || "Unknown"}
                       </p>
@@ -1186,7 +1203,7 @@ export default function MessagesPage() {
                           <label htmlFor={`user-${user.id}`} className="flex items-center gap-3 flex-1 cursor-pointer">
                             <Avatar className="h-8 w-8">
                               <AvatarImage src={user.image || "/placeholder.svg"} />
-                              <AvatarFallback className="bg-sky-100 text-sky-500">
+                              <AvatarFallback className="bg-sky-100 text-sky-500 opacity-0 animate-fadeIn">
                                 {user.name?.[0]?.toUpperCase() || "?"}
                               </AvatarFallback>
                             </Avatar>
@@ -1271,7 +1288,7 @@ export default function MessagesPage() {
                             <div className="flex items-center gap-3">
                               <Avatar className="h-10 w-10">
                                 <AvatarImage src={otherMember?.user?.image || "/placeholder.svg"} />
-                                <AvatarFallback className="bg-sky-100 text-sky-500">
+                                <AvatarFallback className="bg-sky-100 text-sky-500 opacity-0 animate-fadeIn">
                                   {channelName[0]?.toUpperCase() || "?"}
                                 </AvatarFallback>
                               </Avatar>
