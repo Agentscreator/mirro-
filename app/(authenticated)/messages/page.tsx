@@ -44,7 +44,7 @@ import {
   type ChannelPreviewUIComponentProps,
 } from "stream-chat-react"
 import { useStreamContext } from "@/components/providers/StreamProvider"
-import type { Channel as StreamChannel } from "stream-chat"
+import type { Channel as StreamChannel, ChannelMemberResponse } from "stream-chat"
 import "stream-chat-react/dist/css/v2/index.css"
 import { cn } from "@/lib/utils"
 
@@ -733,40 +733,40 @@ export default function MessagesPage() {
 
     setIsSearching(true)
     try {
-// Search for channels/conversations
-const channelResponse = await client.queryChannels(
-  {
-    type: "messaging",
-    members: { $in: [client.userID || ""] },
-    // Fix: Use the correct property path for member names
-    $or: [
-      { name: { $autocomplete: searchQuery } },
-      { "member.user.name": { $autocomplete: searchQuery } }
-    ],
-  },
-  { last_message_at: -1 },
-  { limit: 10 },
-)
+      // Search for channels/conversations
+      const channelResponse = await client.queryChannels(
+        {
+          type: "messaging",
+          members: { $in: [client.userID || ""] },
+          // Fix: Use the correct property path for member names
+          $or: [
+            { name: { $autocomplete: searchQuery } },
+            { "member.user.name": { $autocomplete: searchQuery } }
+          ],
+        },
+        { last_message_at: -1 },
+        { limit: 10 },
+      )
 
-// Search for users matching the query
-const userResponse = await client.queryUsers(
-  {
-    $and: [
-      // Fix: Remove $ne operator and use a different approach
-      {
-        $or: [
-          { name: { $autocomplete: searchQuery } },
-          { username: { $autocomplete: searchQuery } }
-        ],
-      },
-    ],
-  },
-  { id: 1 },
-  { limit: 10 },
-)
+      // Search for users matching the query
+      const userResponse = await client.queryUsers(
+        {
+          $and: [
+            // Fix: Remove $ne operator and use a different approach
+            {
+              $or: [
+                { name: { $autocomplete: searchQuery } },
+                { username: { $autocomplete: searchQuery } }
+              ],
+            },
+          ],
+        },
+        { id: 1 },
+        { limit: 10 },
+      )
 
-// Alternative approach: Filter out current user from results
-const filteredUsers = userResponse.users.filter(user => user.id !== client.userID)
+      // Alternative approach: Filter out current user from results
+      const filteredUsers = userResponse.users.filter(user => user.id !== client.userID)
 
       // Search for messages containing the query
       let messageResults: any[] = []
@@ -1008,8 +1008,16 @@ const filteredUsers = userResponse.users.filter(user => user.id !== client.userI
                 <Input
                   placeholder="Search conversations..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-12 bg-sky-50/50 border-0 rounded-2xl h-12 placeholder:text-sky-400 focus:ring-2 focus:ring-sky-300/50 focus:bg-white/80 transition-all duration-300"
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value)
+                    // Trigger search after a short delay
+                    if (e.target.value.trim()) {
+                      handleSearch()
+                    } else {
+                      setSearchResults([])
+                    }
+                  }}
+                  className="pl-12 bg-sky-50/50 border-0 rounded-2xl h-12 placeholder:text-sky-400 focus:ring-2 focus:ring-sky-300/50 focus:bg-white/80 transition-all duration-300 text-sky-900"
                 />
                 {isSearching && (
                   <div className="absolute right-4 top-1/2 -translate-y-1/2">
@@ -1052,7 +1060,7 @@ const filteredUsers = userResponse.users.filter(user => user.id !== client.userI
           )}
         </div>
         {searchQuery && searchResults.length > 0 && (
-          <div className="absolute z-20 left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-sky-100/50 max-h-[60vh] overflow-y-auto">
+          <div className="absolute z-20 left-4 right-4 mt-2 bg-white rounded-xl shadow-xl border border-sky-100/50 max-h-[60vh] overflow-y-auto">
             <div className="p-3 border-b border-sky-100/50">
               <h3 className="text-sm font-medium text-sky-900">Search Results</h3>
             </div>
@@ -1073,15 +1081,35 @@ const filteredUsers = userResponse.users.filter(user => user.id !== client.userI
                     } else if (result.type === "user") {
                       // Create or navigate to DM with this user
                       router.push(`/messages/${result.data.id}`)
+                      setSearchQuery("")
+                      setSearchResults([])
+                    } else if (result.type === "channel") {
+                      handleSetActiveChannel(result.data)
+                      setSearchQuery("")
+                      setSearchResults([])
                     }
                   }}
                 >
                   <div className="flex items-center gap-3">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={result.type === "message" ? result.data.user?.image : result.data.image} />
+                      <AvatarImage 
+                        src={
+                          result.type === "message" 
+                            ? result.data.user?.image 
+                            : result.type === "channel" 
+                            ? (Object.values(result.data.state.members || {}) as ChannelMemberResponse[]).find(
+                                member => member.user?.id !== client.userID
+                              )?.user?.image
+                            : result.data.image
+                        } 
+                      />
                       <AvatarFallback className="bg-sky-100 text-sky-500">
                         {result.type === "message"
                           ? result.data.user?.name?.[0]?.toUpperCase() || "?"
+                          : result.type === "channel"
+                          ? (Object.values(result.data.state.members || {}) as ChannelMemberResponse[]).find(
+                              member => member.user?.id !== client.userID
+                            )?.user?.name?.[0]?.toUpperCase() || "?"
                           : result.data.name?.[0]?.toUpperCase() || "?"}
                       </AvatarFallback>
                     </Avatar>
@@ -1089,10 +1117,18 @@ const filteredUsers = userResponse.users.filter(user => user.id !== client.userI
                       <p className="text-sm font-medium text-sky-900 truncate">
                         {result.type === "message"
                           ? result.data.user?.name || "Unknown"
+                          : result.type === "channel"
+                          ? (Object.values(result.data.state.members || {}) as ChannelMemberResponse[]).find(
+                              member => member.user?.id !== client.userID
+                            )?.user?.name || "Unknown"
                           : result.data.name || "Unknown"}
                       </p>
                       <p className="text-xs text-sky-600 truncate">
-                        {result.type === "message" ? result.data.text : "@" + (result.data.username || result.data.id)}
+                        {result.type === "message" 
+                          ? result.data.text 
+                          : result.type === "channel"
+                          ? result.data.state.messages[result.data.state.messages.length - 1]?.text || "No messages"
+                          : "@" + (result.data.username || result.data.id)}
                       </p>
                     </div>
                   </div>

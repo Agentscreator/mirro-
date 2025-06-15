@@ -27,21 +27,22 @@ import { useStreamContext } from "@/components/providers/StreamProvider"
 import type { Channel as StreamChannel } from "stream-chat"
 import { isCallInitiatedEvent, hasUserData } from "@/types/streamm"
 import "stream-chat-react/dist/css/v2/index.css"
+import crypto from 'crypto'
 
 // Simple hash function to create deterministic short IDs
 const createChannelId = (userId1: string, userId2: string): string => {
+  // Sort IDs to ensure consistency regardless of order
   const sortedIds = [userId1, userId2].sort()
-  const combined = sortedIds.join("")
-
-  let hash = 0
-  for (let i = 0; i < combined.length; i++) {
-    const char = combined.charCodeAt(i)
-    hash = (hash << 5) - hash + char
-    hash = hash & hash
+  const combined = sortedIds.join('_')
+  
+  // If the combined string is short enough, use it directly
+  if (combined.length <= 60) { // Leave room for 'dm_' prefix
+    return `dm_${combined}`
   }
-
-  const hashStr = Math.abs(hash).toString(36)
-  return `dm_${hashStr}`
+  
+  // Otherwise, create a hash to ensure it's under 64 characters
+  const hash = crypto.createHash('md5').update(combined).digest('hex')
+  return `dm_${hash}` // This will be exactly 35 characters (dm_ + 32 char hash)
 }
 
 // Call Modal Component
