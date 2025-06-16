@@ -26,7 +26,6 @@ import { cn } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { HamburgerMenu } from "@/components/hamburger-menu"
 
 interface FeedPost {
   id: number
@@ -783,11 +782,6 @@ export default function FeedPage() {
 
           {isActive && (
             <>
-              {/* Hamburger Menu - Top Right */}
-              <div className="absolute top-4 right-4 z-20">
-                <HamburgerMenu className="bg-black/50 hover:bg-black/70 text-white" />
-              </div>
-
               <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
                 <div className="flex items-end justify-between">
                   <div className="flex-1 mr-4">
