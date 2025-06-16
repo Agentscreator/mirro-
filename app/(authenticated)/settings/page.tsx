@@ -71,6 +71,7 @@ export default function SettingsPage() {
   // Form state (removed age)
   const [formData, setFormData] = useState({
     nickname: "",
+    username: "",
     gender: "",
     genderPreference: "no-preference",
     preferredAgeMin: 13,
@@ -110,6 +111,7 @@ export default function SettingsPage() {
         // Set form data with proper defaults (removed age)
         setFormData({
           nickname: data.user.nickname || "",
+          username: data.user.username || "",
           gender: data.user.gender || "",
           genderPreference: data.user.genderPreference || "no-preference",
           preferredAgeMin: data.user.preferredAgeMin || 13,
@@ -275,8 +277,12 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="username">Username</Label>
-              <Input id="username" value={userData.username} disabled className="premium-input bg-muted" />
-              <p className="text-xs text-muted-foreground">Username cannot be changed</p>
+              <Input 
+                id="username" 
+                value={formData.username}
+                onChange={(e) => handleInputChange("username", e.target.value)}
+                className="premium-input"
+              />
             </div>
 
             <div className="space-y-2">

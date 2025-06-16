@@ -85,6 +85,7 @@ export async function PUT(request: NextRequest) {
     console.log("Settings update request body:", body)
 
     const {
+      username,
       nickname,
       gender,
       genderPreference,
@@ -93,6 +94,27 @@ export async function PUT(request: NextRequest) {
       proximity,
       tagIds,
     } = body
+
+    // Validate username if provided
+    if (username !== undefined) {
+      // Check username format (alphanumeric, underscores, 3-20 chars)
+      if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
+        return NextResponse.json({ 
+          error: "Username must be 3-20 characters long and can only contain letters, numbers, and underscores" 
+        }, { status: 400 })
+      }
+
+      // Check username uniqueness
+      const existingUser = await db
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.username, username))
+        .limit(1)
+
+      if (existingUser.length > 0 && existingUser[0].id !== session.user.id) {
+        return NextResponse.json({ error: "Username is already taken" }, { status: 400 })
+      }
+    }
 
     // Validate age range
     if (preferredAgeMin !== undefined && preferredAgeMax !== undefined) {
@@ -122,6 +144,7 @@ export async function PUT(request: NextRequest) {
       updated_at: new Date(),
     }
     
+    if (username !== undefined) updateData.username = username
     if (nickname !== undefined) updateData.nickname = nickname
     if (gender !== undefined) updateData.gender = gender
     if (genderPreference !== undefined) updateData.genderPreference = genderPreference
