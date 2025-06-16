@@ -1,4 +1,3 @@
-//app/(authenticated)/settings/page.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -67,6 +66,7 @@ export default function SettingsPage() {
   const [userTags, setUserTags] = useState<UserTag[]>([])
   const [availableTags, setAvailableTags] = useState<TagSelectorCompatibleTag[]>([])
   const [notifications, setNotifications] = useState(true)
+  const [scrollY, setScrollY] = useState(0)
 
   // Form state (removed age)
   const [formData, setFormData] = useState({
@@ -84,6 +84,13 @@ export default function SettingsPage() {
   const [contextTags, setContextTags] = useState<string[]>([])
   const [intentionTags, setIntentionTags] = useState<string[]>([])
 
+  // Handle scroll for transparency effect
+  useEffect(() => {
+    const handleScroll = () => setScrollY(window.scrollY)
+    window.addEventListener("scroll", handleScroll)
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [])
+
   // Fetch user data and tags
   useEffect(() => {
     if (status === "loading") return
@@ -99,7 +106,7 @@ export default function SettingsPage() {
   const fetchUserData = async () => {
     try {
       // Use the new settings endpoint
-      const response = await fetch('/api/users/settings')
+      const response = await fetch("/api/users/settings")
       if (!response.ok) throw new Error("Failed to fetch user data")
 
       const data = await response.json()
@@ -264,11 +271,14 @@ export default function SettingsPage() {
     )
   }
 
+  // Calculate opacity based on scroll position
+  const buttonOpacity = Math.max(0.7, 1 - scrollY / 300)
+
   return (
     <div className="relative">
       <h1 className="mb-6 text-2xl sm:text-3xl font-bold blue-text">Settings</h1>
 
-      <div className="space-y-6 pb-20 md:pb-6">
+      <div className="space-y-6 pb-32 md:pb-24">
         <Card className="premium-card">
           <CardHeader>
             <CardTitle className="premium-heading">Profile Information</CardTitle>
@@ -277,8 +287,8 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="username">Username</Label>
-              <Input 
-                id="username" 
+              <Input
+                id="username"
                 value={formData.username}
                 onChange={(e) => handleInputChange("username", e.target.value)}
                 className="premium-input"
@@ -447,23 +457,31 @@ export default function SettingsPage() {
         </Card>
       </div>
 
-      {/* Floating Save Button */}
-      <div className="fixed bottom-20 left-0 right-0 z-[60] px-4 md:bottom-6 md:left-20 md:right-4">
-        <div className="mx-auto max-w-md md:ml-auto md:mr-0 md:max-w-xs">
-          <Button
-            onClick={handleSaveProfile}
-            disabled={saving}
-            className="w-full rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg backdrop-blur-sm border border-blue-100/20"
-          >
-            {saving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              "Save Changes"
-            )}
-          </Button>
+      {/* Enhanced Floating Save Button */}
+      <div className="fixed bottom-0 left-0 right-0 z-[60] pointer-events-none">
+        <div className="pointer-events-auto transition-all duration-300 ease-out" style={{ opacity: buttonOpacity }}>
+          {/* Background blur overlay */}
+          <div className="absolute inset-0 bg-gradient-to-t from-white/80 via-white/40 to-transparent backdrop-blur-sm" />
+
+          {/* Button container */}
+          <div className="relative px-4 py-6 md:px-8">
+            <div className="mx-auto max-w-sm">
+              <Button
+                onClick={handleSaveProfile}
+                disabled={saving}
+                className="w-full h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xl border border-blue-100/20 transition-all duration-200 hover:shadow-2xl hover:scale-[1.02] disabled:hover:scale-100"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Saving Changes...
+                  </>
+                ) : (
+                  <span className="font-semibold">Save Changes</span>
+                )}
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
