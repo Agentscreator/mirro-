@@ -278,7 +278,7 @@ export default function SettingsPage() {
     <div className="relative">
       <h1 className="mb-6 text-2xl sm:text-3xl font-bold blue-text">Settings</h1>
 
-      <div className="space-y-6 pb-32 md:pb-24">
+      <div className="space-y-6 pb-40 md:pb-24">
         <Card className="premium-card">
           <CardHeader>
             <CardTitle className="premium-heading">Profile Information</CardTitle>
@@ -457,14 +457,14 @@ export default function SettingsPage() {
         </Card>
       </div>
 
-      {/* Enhanced Floating Save Button */}
-      <div className="fixed bottom-0 left-0 right-0 z-[60] pointer-events-none">
+      {/* Enhanced Floating Save Button - Above Navigation */}
+      <div className="fixed bottom-16 left-0 right-0 z-[60] pointer-events-none md:bottom-6 md:left-20 md:right-4">
         <div className="pointer-events-auto transition-all duration-300 ease-out" style={{ opacity: buttonOpacity }}>
           {/* Background blur overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-white/80 via-white/40 to-transparent backdrop-blur-sm" />
+          <div className="absolute inset-0 bg-gradient-to-t from-white/90 via-white/60 to-transparent backdrop-blur-sm" />
 
           {/* Button container */}
-          <div className="relative px-4 py-6 md:px-8">
+          <div className="relative px-4 py-4 md:px-8 md:py-6">
             <div className="mx-auto max-w-sm">
               <Button
                 onClick={handleSaveProfile}
