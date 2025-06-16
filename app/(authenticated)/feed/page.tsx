@@ -420,13 +420,16 @@ export default function FeedPage() {
       if (response.ok) {
         const shareData = await response.json()
 
+        // Create the public share URL
+        const shareUrl = `${window.location.origin}/post/${postId}`
+
         // Try native sharing first on mobile
         if (navigator.share && /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
           try {
             await navigator.share({
-              title: shareData.title,
-              text: shareData.text,
-              url: shareData.url,
+              title: shareData.title || "Check out this post",
+              text: shareData.text || "Shared from the app",
+              url: shareUrl,
             })
             return
           } catch (shareError) {
@@ -442,19 +445,19 @@ export default function FeedPage() {
             document.body.appendChild(tempButton)
             tempButton.focus()
 
-            await navigator.clipboard.writeText(shareData.url)
+            await navigator.clipboard.writeText(shareUrl)
 
             // Clean up
             document.body.removeChild(tempButton)
 
             toast({
               title: "Link Copied!",
-              description: "Post link has been copied to your clipboard.",
+              description: "Post link has been copied to your clipboard. Anyone can view this post!",
             })
           } else {
             // Fallback for older browsers
             const textArea = document.createElement("textarea")
-            textArea.value = shareData.url
+            textArea.value = shareUrl
             document.body.appendChild(textArea)
             textArea.focus()
             textArea.select()
@@ -462,12 +465,12 @@ export default function FeedPage() {
               document.execCommand("copy")
               toast({
                 title: "Link Copied!",
-                description: "Post link has been copied to your clipboard.",
+                description: "Post link has been copied to your clipboard. Anyone can view this post!",
               })
             } catch (err) {
               toast({
                 title: "Share",
-                description: `Copy this link: ${shareData.url}`,
+                description: `Copy this link: ${shareUrl}`,
               })
             }
             document.body.removeChild(textArea)
@@ -477,7 +480,7 @@ export default function FeedPage() {
           // Fallback to showing the URL
           toast({
             title: "Share",
-            description: `Copy this link: ${shareData.url}`,
+            description: `Copy this link: ${shareUrl}`,
           })
         }
       }
@@ -843,6 +846,8 @@ export default function FeedPage() {
                             post.user.profileImage ||
                             post.user.image ||
                             "/placeholder.svg?height=40&width=40" ||
+                            "/placeholder.svg" ||
+                            "/placeholder.svg" ||
                             "/placeholder.svg" ||
                             "/placeholder.svg" ||
                             "/placeholder.svg"
