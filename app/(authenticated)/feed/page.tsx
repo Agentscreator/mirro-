@@ -13,9 +13,6 @@ import {
   Share2,
   Send,
   Play,
-  Pause,
-  Volume2,
-  VolumeX,
   MoreHorizontal,
   Reply,
   ChevronDown,
@@ -321,11 +318,13 @@ export default function FeedPage() {
 
     if (currentPost.video && videoRefs.current[currentPost.id]) {
       const video = videoRefs.current[currentPost.id]
+      video.muted = isMuted
 
       if (isPlaying) {
         video.play().catch(console.error)
+      } else {
+        video.pause()
       }
-      video.muted = isMuted
     }
   }, [currentIndex, posts, isPlaying, isMuted])
 
@@ -421,6 +420,7 @@ export default function FeedPage() {
       if (response.ok) {
         const shareData = await response.json()
 
+        // Try native sharing first on mobile
         if (navigator.share && /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
           try {
             await navigator.share({
@@ -434,11 +434,50 @@ export default function FeedPage() {
           }
         }
 
-        if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(shareData.url)
+        // Try clipboard API with focus handling
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            // Create a temporary button and focus it
+            const tempButton = document.createElement("button")
+            document.body.appendChild(tempButton)
+            tempButton.focus()
+
+            await navigator.clipboard.writeText(shareData.url)
+
+            // Clean up
+            document.body.removeChild(tempButton)
+
+            toast({
+              title: "Link Copied!",
+              description: "Post link has been copied to your clipboard.",
+            })
+          } else {
+            // Fallback for older browsers
+            const textArea = document.createElement("textarea")
+            textArea.value = shareData.url
+            document.body.appendChild(textArea)
+            textArea.focus()
+            textArea.select()
+            try {
+              document.execCommand("copy")
+              toast({
+                title: "Link Copied!",
+                description: "Post link has been copied to your clipboard.",
+              })
+            } catch (err) {
+              toast({
+                title: "Share",
+                description: `Copy this link: ${shareData.url}`,
+              })
+            }
+            document.body.removeChild(textArea)
+          }
+        } catch (clipboardError) {
+          console.error("Clipboard operation failed:", clipboardError)
+          // Fallback to showing the URL
           toast({
-            title: "Link Copied!",
-            description: "Post link has been copied to your clipboard.",
+            title: "Share",
+            description: `Copy this link: ${shareData.url}`,
           })
         }
       }
@@ -712,6 +751,23 @@ export default function FeedPage() {
     )
   }
 
+  const handleVideoClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const newPlayingState = !isPlaying
+    setIsPlaying(newPlayingState)
+
+    // Immediately update the current video
+    const currentPost = posts[currentIndex]
+    if (currentPost?.video && videoRefs.current[currentPost.id]) {
+      const video = videoRefs.current[currentPost.id]
+      if (newPlayingState) {
+        video.play().catch(console.error)
+      } else {
+        video.pause()
+      }
+    }
+  }
+
   const renderPost = (post: FeedPost, index: number) => {
     const isActive = index === currentIndex
     const offset = (index - currentIndex) * window.innerHeight + swipeOffset
@@ -743,11 +799,11 @@ export default function FeedPage() {
                 if (el) videoRefs.current[post.id] = el
               }}
               src={post.video}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover cursor-pointer"
               loop
               playsInline
               muted={isMuted}
-              onClick={() => setIsPlaying(!isPlaying)}
+              onClick={handleVideoClick}
             />
           ) : post.image ? (
             <Image
@@ -760,23 +816,18 @@ export default function FeedPage() {
           ) : null}
 
           {post.video && isActive && (
-            <div className="absolute bottom-32 left-4 flex gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsPlaying(!isPlaying)}
-                className="text-white hover:bg-white/20 rounded-full"
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div
+                className={cn(
+                  "bg-black/50 rounded-full p-4 transition-opacity duration-200",
+                  isDragging ? "opacity-0" : "opacity-0",
+                )}
+                style={{
+                  opacity: isDragging ? 0 : isPlaying ? 0 : 0.8,
+                }}
               >
-                {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsMuted(!isMuted)}
-                className="text-white hover:bg-white/20 rounded-full"
-              >
-                {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-              </Button>
+                <Play className="h-12 w-12 text-white fill-white" />
+              </div>
             </div>
           )}
 
@@ -792,6 +843,7 @@ export default function FeedPage() {
                             post.user.profileImage ||
                             post.user.image ||
                             "/placeholder.svg?height=40&width=40" ||
+                            "/placeholder.svg" ||
                             "/placeholder.svg" ||
                             "/placeholder.svg"
                           }

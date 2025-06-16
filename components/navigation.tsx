@@ -1,5 +1,4 @@
 "use client"
-
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Home, Search, User, MessageSquare } from "lucide-react"
@@ -23,16 +22,16 @@ export function Navigation() {
       active: pathname === "/discover",
     },
     {
-      href: "/profile",
-      icon: User,
-      label: "You",
-      active: pathname === "/profile",
-    },
-    {
       href: "/messages",
       icon: MessageSquare,
       label: "Messages",
       active: pathname === "/messages",
+    },
+    {
+      href: "/profile",
+      icon: User,
+      label: "You",
+      active: pathname === "/profile",
     }
   ]
 

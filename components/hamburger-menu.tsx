@@ -39,7 +39,7 @@ export function HamburgerMenu({ className }: HamburgerMenuProps) {
 
   const handleLogout = async () => {
     setIsOpen(false)
-    await signOut({ callbackUrl: "/auth/login" })
+    await signOut({ callbackUrl: "/login" })
   }
 
   return (
