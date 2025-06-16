@@ -72,7 +72,7 @@ export default function FeedPage() {
 
   // Video controls
   const [isPlaying, setIsPlaying] = useState(true)
-  const [isMuted, setIsMuted] = useState(false) // Changed from true to false
+  const [isMuted, setIsMuted] = useState(false)
   const videoRefs = useRef<{ [key: number]: HTMLVideoElement }>({})
 
   // Comments
@@ -92,12 +92,16 @@ export default function FeedPage() {
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
-  const [postScale, setPostScale] = useState(1) // For zoom effect
+  const [postScale, setPostScale] = useState(1)
   const containerRef = useRef<HTMLDivElement>(null)
 
+  // Desktop scrolling states
+  const [wheelDelta, setWheelDelta] = useState(0)
+  const [wheelTimeout, setWheelTimeout] = useState<NodeJS.Timeout | null>(null)
+
   const minSwipeDistance = 30
-  const swipeThreshold = 0.15 // 15% of screen height for easier swiping
-  const dampingFactor = 0.5 // Reduced damping for less bounce
+  const swipeThreshold = 0.15
+  const dampingFactor = 0.5
 
   const fetchPosts = useCallback(async (cursor?: string, excludeIds: number[] = []) => {
     try {
@@ -107,7 +111,7 @@ export default function FeedPage() {
         ...(excludeIds.length > 0 && { excludeIds: excludeIds.join(",") }),
       })
 
-      const response = await fetch(`/api/feed?${params}&t=${Date.now()}`) // Added timestamp to prevent duplicates
+      const response = await fetch(`/api/feed?${params}&t=${Date.now()}`)
       if (!response.ok) throw new Error("Failed to fetch posts")
 
       const data = await response.json()
@@ -140,7 +144,6 @@ export default function FeedPage() {
     const data = await fetchPosts(nextCursor || undefined, seenPostIds)
 
     if (data.posts.length > 0) {
-      // Filter out any duplicate posts
       const newPosts = data.posts.filter(
         (newPost: FeedPost) => !posts.some((existingPost) => existingPost.id === newPost.id),
       )
@@ -155,6 +158,122 @@ export default function FeedPage() {
     }
     setLoadingMore(false)
   }, [fetchPosts, nextCursor, hasMore, loadingMore, seenPostIds, posts])
+
+  // Navigation function
+  const navigateToPost = useCallback(
+    (direction: "next" | "prev") => {
+      if (isTransitioning) return
+
+      setIsTransitioning(true)
+
+      if (direction === "next" && currentIndex < posts.length - 1) {
+        setCurrentIndex((prev) => prev + 1)
+        // Load more posts when near the end
+        if (currentIndex >= posts.length - 3) {
+          loadMorePosts()
+        }
+      } else if (direction === "prev" && currentIndex > 0) {
+        setCurrentIndex((prev) => prev - 1)
+      }
+
+      // Reset states
+      setSwipeOffset(0)
+      setWheelDelta(0)
+
+      setTimeout(() => {
+        setIsTransitioning(false)
+        setIsDragging(false)
+      }, 300)
+    },
+    [currentIndex, posts.length, isTransitioning, loadMorePosts],
+  )
+
+  // Desktop wheel event handler
+  const handleWheel = useCallback(
+    (e: WheelEvent) => {
+      e.preventDefault()
+
+      if (isTransitioning || showComments) return
+
+      const delta = e.deltaY
+      const newWheelDelta = wheelDelta + delta
+
+      // Clear existing timeout
+      if (wheelTimeout) {
+        clearTimeout(wheelTimeout)
+      }
+
+      // Accumulate wheel delta for smoother scrolling
+      setWheelDelta(newWheelDelta)
+
+      // Set timeout to trigger navigation after wheel stops
+      const timeout = setTimeout(() => {
+        if (Math.abs(newWheelDelta) > 100) {
+          // Threshold for navigation
+          if (newWheelDelta > 0) {
+            navigateToPost("next")
+          } else {
+            navigateToPost("prev")
+          }
+        }
+        setWheelDelta(0)
+      }, 150)
+
+      setWheelTimeout(timeout)
+    },
+    [wheelDelta, wheelTimeout, isTransitioning, showComments, navigateToPost],
+  )
+
+  // Keyboard navigation
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (showComments) return
+
+      switch (e.key) {
+        case "ArrowDown":
+        case " ": // Spacebar
+          e.preventDefault()
+          navigateToPost("next")
+          break
+        case "ArrowUp":
+          e.preventDefault()
+          navigateToPost("prev")
+          break
+        case "Enter":
+          e.preventDefault()
+          if (posts[currentIndex]) {
+            setIsPlaying(!isPlaying)
+          }
+          break
+        case "m":
+        case "M":
+          e.preventDefault()
+          setIsMuted(!isMuted)
+          break
+      }
+    },
+    [showComments, navigateToPost, posts, currentIndex, isPlaying, isMuted],
+  )
+
+  // Add desktop event listeners
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    // Add wheel event listener
+    container.addEventListener("wheel", handleWheel, { passive: false })
+
+    // Add keyboard event listener
+    document.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      container.removeEventListener("wheel", handleWheel)
+      document.removeEventListener("keydown", handleKeyDown)
+      if (wheelTimeout) {
+        clearTimeout(wheelTimeout)
+      }
+    }
+  }, [handleWheel, handleKeyDown, wheelTimeout])
 
   // Preload videos for smooth playback
   const preloadVideo = useCallback(
@@ -182,7 +301,6 @@ export default function FeedPage() {
   // Preload adjacent videos
   useEffect(() => {
     if (posts.length > 0) {
-      // Preload current, next, and previous videos
       const indicesToPreload = [currentIndex - 1, currentIndex, currentIndex + 1].filter(
         (i) => i >= 0 && i < posts.length,
       )
@@ -243,12 +361,10 @@ export default function FeedPage() {
     const deltaY = currentY - touchStart.y
     const screenHeight = window.innerHeight
 
-    // Apply reduced damping for less bounce
     let offset = deltaY
 
-    // Add resistance when trying to scroll beyond bounds
     if ((currentIndex === 0 && deltaY > 0) || (currentIndex === posts.length - 1 && deltaY < 0)) {
-      offset = deltaY * dampingFactor * 0.2 // Reduced resistance
+      offset = deltaY * dampingFactor * 0.2
     } else {
       offset = deltaY * dampingFactor
     }
@@ -264,37 +380,20 @@ export default function FeedPage() {
     const swipeDistance = Math.abs(deltaY)
     const swipeVelocity = swipeDistance / (Date.now() - touchStart.time)
 
-    // More sensitive swipe detection like TikTok
     const shouldNavigate =
       swipeDistance > minSwipeDistance && (Math.abs(deltaY) > screenHeight * swipeThreshold || swipeVelocity > 0.3)
 
     if (shouldNavigate) {
-      setIsTransitioning(true)
-
-      if (deltaY < 0 && currentIndex < posts.length - 1) {
-        // Swipe up - next post
-        setCurrentIndex((prev) => prev + 1)
-        // Load more posts when near the end
-        if (currentIndex >= posts.length - 3) {
-          loadMorePosts()
-        }
-      } else if (deltaY > 0 && currentIndex > 0) {
-        // Swipe down - previous post
-        setCurrentIndex((prev) => prev - 1)
+      if (deltaY < 0) {
+        navigateToPost("next")
+      } else {
+        navigateToPost("prev")
       }
-
-      // Smoother transition to final position
-      setTimeout(() => {
-        setSwipeOffset(0)
-        setIsTransitioning(false)
-        setIsDragging(false)
-      }, 300) // Reduced from 400ms
     } else {
-      // Smooth snap back to original position
       setSwipeOffset(0)
       setTimeout(() => {
         setIsDragging(false)
-      }, 200) // Reduced from 300ms
+      }, 200)
     }
 
     setTouchStart(null)
@@ -370,23 +469,19 @@ export default function FeedPage() {
     const commentMap = new Map<number, Comment>()
     const topLevelComments: Comment[] = []
 
-    // First pass: create map of all comments
     comments.forEach((comment) => {
       commentMap.set(comment.id, { ...comment, replies: [] })
     })
 
-    // Second pass: organize into hierarchy
     comments.forEach((comment) => {
       const commentWithReplies = commentMap.get(comment.id)!
 
       if (comment.parentCommentId) {
-        // This is a reply
         const parentComment = commentMap.get(comment.parentCommentId)
         if (parentComment) {
           parentComment.replies!.push(commentWithReplies)
         }
       } else {
-        // This is a top-level comment
         topLevelComments.push(commentWithReplies)
       }
     })
@@ -433,10 +528,8 @@ export default function FeedPage() {
       })
 
       if (response.ok) {
-        // Refresh comments to get updated nested structure
         await fetchComments(posts[currentIndex].id)
 
-        // Reset form
         if (parentCommentId) {
           setReplyContent("")
           setReplyingTo(null)
@@ -444,7 +537,6 @@ export default function FeedPage() {
           setNewComment("")
         }
 
-        // Update comment count
         setPosts((prev) =>
           prev.map((post) => (post.id === posts[currentIndex].id ? { ...post, comments: post.comments + 1 } : post)),
         )
@@ -473,7 +565,6 @@ export default function FeedPage() {
       })
 
       if (response.ok) {
-        // Refresh comments to get updated nested structure
         await fetchComments(posts[currentIndex].id)
 
         setPosts((prev) =>
@@ -517,7 +608,7 @@ export default function FeedPage() {
   const renderComment = (comment: Comment, depth = 0) => {
     const isExpanded = expandedComments.has(comment.id)
     const hasReplies = comment.replies && comment.replies.length > 0
-    const maxDepth = 3 // Limit nesting depth
+    const maxDepth = 3
 
     return (
       <div key={comment.id} className={cn("space-y-2", depth > 0 && "ml-4 border-l-2 border-gray-100 pl-4")}>
@@ -542,7 +633,6 @@ export default function FeedPage() {
                 </div>
                 <p className="text-sm text-gray-800 leading-relaxed break-words">{comment.content}</p>
 
-                {/* Reply button */}
                 <div className="flex items-center gap-2 mt-1">
                   {depth < maxDepth && (
                     <Button
@@ -592,7 +682,6 @@ export default function FeedPage() {
               )}
             </div>
 
-            {/* Reply input */}
             {replyingTo === comment.id && (
               <div className="mt-3 space-y-2">
                 <Textarea
@@ -628,7 +717,6 @@ export default function FeedPage() {
           </div>
         </div>
 
-        {/* Nested replies */}
         {hasReplies && isExpanded && (
           <div className="space-y-3">{comment.replies!.map((reply) => renderComment(reply, depth + 1))}</div>
         )}
@@ -640,7 +728,6 @@ export default function FeedPage() {
     const isActive = index === currentIndex
     const offset = (index - currentIndex) * window.innerHeight + swipeOffset
 
-    // Calculate opacity and scale for smooth transitions
     const distance = Math.abs(index - currentIndex)
     const opacity = distance === 0 ? 1 : Math.max(0.3, 1 - distance * 0.3)
     const scale = distance === 0 ? (isActive ? postScale : 1) : Math.max(0.95, 1 - distance * 0.05)
@@ -652,16 +739,15 @@ export default function FeedPage() {
         style={{
           transform: `translateY(${offset}px) scale(${scale})`,
           transition: isTransitioning
-            ? "transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)" // Smoother easing
+            ? "transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
             : isDragging
               ? "none"
-              : "transform 0.2s ease-out", // Faster snap back
+              : "transform 0.2s ease-out",
           zIndex: isActive ? 10 : Math.max(1, 10 - distance),
           opacity,
         }}
       >
         <div className="relative w-full h-full flex items-center justify-center bg-black">
-          {/* Media */}
           {post.video ? (
             <video
               data-video-id={post.id}
@@ -685,7 +771,6 @@ export default function FeedPage() {
             />
           ) : null}
 
-          {/* Video Controls - Only show on active post */}
           {post.video && isActive && (
             <div className="absolute bottom-32 left-4 flex gap-2">
               <Button
@@ -707,11 +792,9 @@ export default function FeedPage() {
             </div>
           )}
 
-          {/* User Info & Actions - Only show on active post */}
           {isActive && (
             <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
               <div className="flex items-end justify-between">
-                {/* Left side - User info and content */}
                 <div className="flex-1 mr-4">
                   <div className="flex items-center gap-3 mb-2">
                     <div className="relative h-10 w-10 overflow-hidden rounded-full">
@@ -720,6 +803,7 @@ export default function FeedPage() {
                           post.user.profileImage ||
                           post.user.image ||
                           "/placeholder.svg?height=40&width=40" ||
+                          "/placeholder.svg" ||
                           "/placeholder.svg"
                         }
                         alt={post.user.username}
@@ -736,7 +820,6 @@ export default function FeedPage() {
                   {post.content && <p className="text-white text-sm leading-relaxed mb-3 max-w-xs">{post.content}</p>}
                 </div>
 
-                {/* Right side - Action buttons */}
                 <div className="flex flex-col items-center gap-4">
                   <Button
                     variant="ghost"
@@ -806,22 +889,26 @@ export default function FeedPage() {
 
   return (
     <div className="h-screen bg-black overflow-hidden relative">
+      {/* Desktop Navigation Hint */}
+      <div className="hidden md:block absolute top-4 left-1/2 transform -translate-x-1/2 z-20 text-white/60 text-sm">
+        Use mouse wheel, arrow keys, or spacebar to navigate
+      </div>
+
       {/* Main Content Container */}
       <div
         ref={containerRef}
-        className="h-full w-full relative"
+        className="h-full w-full relative focus:outline-none"
+        tabIndex={0}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        {/* Render visible posts (current, previous, next) */}
         {posts.slice(Math.max(0, currentIndex - 1), currentIndex + 2).map((post, relativeIndex) => {
           const actualIndex = Math.max(0, currentIndex - 1) + relativeIndex
           return renderPost(post, actualIndex)
         })}
       </div>
 
-      {/* Loading indicator */}
       {loadingMore && (
         <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
