@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Search, User, MessageSquare, Settings } from "lucide-react"
+import { Home, Search, User, MessageSquare } from "lucide-react"
 import { Logo } from "@/components/logo"
 import { cn } from "@/lib/utils"
 
@@ -33,13 +33,7 @@ export function Navigation() {
       icon: MessageSquare,
       label: "Messages",
       active: pathname === "/messages",
-    },
-    {
-      href: "/settings",
-      icon: Settings,
-      label: "Settings",
-      active: pathname === "/settings",
-    },
+    }
   ]
 
   return (

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
-import { Bell, LogOut, Loader2 } from "lucide-react"
+import { Bell, LogOut, Loader2, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
@@ -275,8 +275,19 @@ export default function SettingsPage() {
   const buttonOpacity = Math.max(0.7, 1 - scrollY / 300)
 
   return (
-    <div className="relative">
-      <h1 className="mb-6 text-2xl sm:text-3xl font-bold blue-text">Settings</h1>
+    <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* Header with Back Button */}
+      <div className="flex items-center gap-4 mb-6">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => router.back()}
+          className="rounded-full hover:bg-blue-50 text-blue-600"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <h1 className="text-2xl sm:text-3xl font-bold text-blue-600">Account Settings</h1>
+      </div>
 
       <div className="space-y-6 pb-40 md:pb-24">
         <Card className="premium-card">

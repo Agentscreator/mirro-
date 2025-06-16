@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { HamburgerMenu } from "@/components/hamburger-menu"
 import {
   Chat,
   Channel,
@@ -973,43 +974,7 @@ export default function MessagesPage() {
                 >
                   <Plus className="h-5 w-5" />
                 </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="p-3 hover:bg-sky-50 text-sky-600 rounded-full transition-all duration-200"
-                    >
-                      <MoreVertical className="h-5 w-5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-white/95 backdrop-blur-xl border-sky-100/50 shadow-xl">
-                    <DropdownMenuItem
-                      className="text-sky-700 hover:bg-sky-50"
-                      onClick={() => {
-                        setShowNewGroupModal(true)
-                        loadUsers()
-                      }}
-                    >
-                      <Users className="h-4 w-4 mr-3" />
-                      New Group
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-sky-700 hover:bg-sky-50"
-                      onClick={() => {
-                        setShowArchivedChats(true)
-                        loadArchivedChats()
-                      }}
-                    >
-                      <Archive className="h-4 w-4 mr-3" />
-                      Archived Chats
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="text-sky-700 hover:bg-sky-50" onClick={() => setShowSettings(true)}>
-                      <Settings className="h-4 w-4 mr-3" />
-                      Settings
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <HamburgerMenu />
               </div>
             </div>
 

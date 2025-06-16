@@ -1,11 +1,14 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect, useCallback } from "react"
 import { Search, MessageCircle, User } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { UserCard } from "@/components/user-card"
 import { TypingAnimation } from "@/components/typing-animation"
+import { HamburgerMenu } from "@/components/hamburger-menu"
 import type { RecommendedUser } from "@/src/lib/recommendationService"
 import { fetchRecommendations, generateExplanation } from "@/src/lib/apiServices"
 import type { RecommendedUser as ApiRecommendedUser } from "@/src/lib/apiServices"
@@ -28,6 +31,14 @@ interface ExtendedRecommendedUser extends RecommendedUser {
   profileImage?: string
 }
 
+// Gender options for the user's own gender
+const GENDER_OPTIONS = [
+  { id: "male", label: "Male" },
+  { id: "female", label: "Female" },
+  { id: "non-binary", label: "Non-binary" },
+  { id: "prefer-not-to-say", label: "Prefer not to say" },
+]
+
 export default function DiscoverPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [users, setUsers] = useState<ExtendedRecommendedUser[]>([])
@@ -46,10 +57,10 @@ export default function DiscoverPage() {
   // Helper function to get the best available image URL
   const getBestImageUrl = (user: { image?: string | null; profileImage?: string | null }): string | null => {
     // Priority: profileImage > image > null
-    if (user.profileImage && user.profileImage.trim() && !user.profileImage.includes('placeholder')) {
+    if (user.profileImage && user.profileImage.trim() && !user.profileImage.includes("placeholder")) {
       return user.profileImage
     }
-    if (user.image && user.image.trim() && !user.image.includes('placeholder')) {
+    if (user.image && user.image.trim() && !user.image.includes("placeholder")) {
       return user.image
     }
     return null
@@ -58,9 +69,9 @@ export default function DiscoverPage() {
   // Helper function to convert API user to local user type
   const convertApiUserToLocalUser = (apiUser: ApiRecommendedUser): ExtendedRecommendedUser => {
     console.log("Converting API user:", apiUser)
-    
+
     const bestImageUrl = getBestImageUrl(apiUser as any)
-    
+
     return {
       id: apiUser.id,
       username: apiUser.username,
@@ -75,44 +86,41 @@ export default function DiscoverPage() {
   // Search users function
   const searchUsers = async (query: string) => {
     if (!query.trim()) {
-      setSearchResults([]);
-      setShowSearchResults(false);
-      return;
+      setSearchResults([])
+      setShowSearchResults(false)
+      return
     }
 
-    setSearchLoading(true);
+    setSearchLoading(true)
     try {
-      const response = await fetch(
-        `/api/users/search?q=${encodeURIComponent(query)}&limit=10`,
-        {
-          method: "GET",
-          credentials: "include",
-        }
-      );
+      const response = await fetch(`/api/users/search?q=${encodeURIComponent(query)}&limit=10`, {
+        method: "GET",
+        credentials: "include",
+      })
 
       if (response.ok) {
-        const { users } = await response.json();
+        const { users } = await response.json()
         console.log("Search results:", users) // Debug log
-        
+
         // Process search results to ensure consistent image handling
         const processedUsers = users.map((user: any) => ({
           ...user,
-          image: getBestImageUrl(user) || "" // Ensure we get the best available image
+          image: getBestImageUrl(user) || "", // Ensure we get the best available image
         }))
-        
-        setSearchResults(processedUsers);
-        setShowSearchResults(true);
+
+        setSearchResults(processedUsers)
+        setShowSearchResults(true)
       } else {
-        console.warn("Search returned status", response.status);
-        setSearchResults([]);
-        setShowSearchResults(false);
+        console.warn("Search returned status", response.status)
+        setSearchResults([])
+        setShowSearchResults(false)
       }
     } catch (error) {
-      console.error("Search error:", error);
-      setSearchResults([]);
-      setShowSearchResults(false);
+      console.error("Search error:", error)
+      setSearchResults([])
+      setShowSearchResults(false)
     } finally {
-      setSearchLoading(false);
+      setSearchLoading(false)
     }
   }
 
@@ -143,7 +151,7 @@ export default function DiscoverPage() {
   const handleSearchBlur = (e: React.FocusEvent) => {
     // Check if the blur is happening because user clicked inside the dropdown
     const relatedTarget = e.relatedTarget as HTMLElement
-    if (relatedTarget && relatedTarget.closest('[data-search-dropdown]')) {
+    if (relatedTarget && relatedTarget.closest("[data-search-dropdown]")) {
       return // Don't hide if clicking inside dropdown
     }
     setTimeout(() => setShowSearchResults(false), 200)
@@ -231,7 +239,7 @@ export default function DiscoverPage() {
       setLoadingMore(true)
       const { users: newUsers, hasMore: moreAvailable, nextPage } = await fetchRecommendations(currentPage, 2)
       const usersWithReasons = [...users]
-      const existingUserIds = new Set(users.map(user => user.id))
+      const existingUserIds = new Set(users.map((user) => user.id))
 
       for (const newUser of newUsers) {
         // Skip if user already exists
@@ -281,8 +289,12 @@ export default function DiscoverPage() {
   }
 
   return (
-    <div>
-      <h1 className="mb-4 text-2xl sm:text-3xl font-bold text-blue-600">Discover</h1>
+    <div className="relative">
+      {/* Header with Hamburger Menu */}
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl sm:text-3xl font-bold text-blue-600">Discover</h1>
+        <HamburgerMenu />
+      </div>
 
       <div className="relative mb-6">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -297,7 +309,7 @@ export default function DiscoverPage() {
 
         {/* Search Results Dropdown */}
         {showSearchResults && (
-          <div 
+          <div
             className="absolute top-full left-0 right-0 mt-1 bg-white border border-blue-200 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto"
             data-search-dropdown
           >
@@ -310,7 +322,7 @@ export default function DiscoverPage() {
                 {searchResults.map((user) => {
                   const imageUrl = getBestImageUrl(user)
                   console.log("Search result image URL:", imageUrl, "for user:", user.username)
-                  
+
                   return (
                     <div
                       key={user.id}
@@ -321,21 +333,21 @@ export default function DiscoverPage() {
                           <div className="relative h-8 w-8 overflow-hidden rounded-full">
                             {imageUrl ? (
                               <img
-                                src={imageUrl}
+                                src={imageUrl || "/placeholder.svg"}
                                 alt={user.username}
                                 className="w-full h-full object-cover"
                                 onError={(e) => {
                                   console.log("Image failed to load:", imageUrl)
                                   // Fallback to initials if image fails to load
-                                  e.currentTarget.style.display = 'none'
+                                  e.currentTarget.style.display = "none"
                                   const fallback = e.currentTarget.nextElementSibling as HTMLElement
-                                  if (fallback) fallback.style.display = 'flex'
+                                  if (fallback) fallback.style.display = "flex"
                                 }}
                               />
                             ) : null}
-                            <div 
+                            <div
                               className="w-full h-full bg-blue-500 flex items-center justify-center text-white text-xs font-semibold"
-                              style={{ display: imageUrl ? 'none' : 'flex' }}
+                              style={{ display: imageUrl ? "none" : "flex" }}
                             >
                               {user.username[0]?.toUpperCase() || "?"}
                             </div>

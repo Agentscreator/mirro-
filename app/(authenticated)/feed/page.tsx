@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { HamburgerMenu } from "@/components/hamburger-menu"
 
 interface FeedPost {
   id: number
@@ -168,7 +169,6 @@ export default function FeedPage() {
 
       if (direction === "next" && currentIndex < posts.length - 1) {
         setCurrentIndex((prev) => prev + 1)
-        // Load more posts when near the end
         if (currentIndex >= posts.length - 3) {
           loadMorePosts()
         }
@@ -176,7 +176,6 @@ export default function FeedPage() {
         setCurrentIndex((prev) => prev - 1)
       }
 
-      // Reset states
       setSwipeOffset(0)
       setWheelDelta(0)
 
@@ -198,18 +197,14 @@ export default function FeedPage() {
       const delta = e.deltaY
       const newWheelDelta = wheelDelta + delta
 
-      // Clear existing timeout
       if (wheelTimeout) {
         clearTimeout(wheelTimeout)
       }
 
-      // Accumulate wheel delta for smoother scrolling
       setWheelDelta(newWheelDelta)
 
-      // Set timeout to trigger navigation after wheel stops
       const timeout = setTimeout(() => {
         if (Math.abs(newWheelDelta) > 100) {
-          // Threshold for navigation
           if (newWheelDelta > 0) {
             navigateToPost("next")
           } else {
@@ -231,7 +226,7 @@ export default function FeedPage() {
 
       switch (e.key) {
         case "ArrowDown":
-        case " ": // Spacebar
+        case " ":
           e.preventDefault()
           navigateToPost("next")
           break
@@ -260,10 +255,7 @@ export default function FeedPage() {
     const container = containerRef.current
     if (!container) return
 
-    // Add wheel event listener
     container.addEventListener("wheel", handleWheel, { passive: false })
-
-    // Add keyboard event listener
     document.addEventListener("keydown", handleKeyDown)
 
     return () => {
@@ -318,11 +310,9 @@ export default function FeedPage() {
     const currentPost = posts[currentIndex]
     if (!currentPost) return
 
-    // Zoom effect when arriving at new post
     setPostScale(1.05)
     setTimeout(() => setPostScale(1), 200)
 
-    // Pause all videos except current
     Object.entries(videoRefs.current).forEach(([postId, video]) => {
       if (video && Number.parseInt(postId) !== currentPost.id) {
         video.pause()
@@ -330,7 +320,6 @@ export default function FeedPage() {
       }
     })
 
-    // Play current video
     if (currentPost.video && videoRefs.current[currentPost.id]) {
       const video = videoRefs.current[currentPost.id]
 
@@ -793,75 +782,84 @@ export default function FeedPage() {
           )}
 
           {isActive && (
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
-              <div className="flex items-end justify-between">
-                <div className="flex-1 mr-4">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="relative h-10 w-10 overflow-hidden rounded-full">
-                      <Image
-                        src={
-                          post.user.profileImage ||
-                          post.user.image ||
-                          "/placeholder.svg?height=40&width=40" ||
-                          "/placeholder.svg" ||
-                          "/placeholder.svg"
-                        }
-                        alt={post.user.username}
-                        fill
-                        className="object-cover"
-                        sizes="40px"
-                      />
+            <>
+              {/* Hamburger Menu - Top Right */}
+              <div className="absolute top-4 right-4 z-20">
+                <HamburgerMenu className="bg-black/50 hover:bg-black/70 text-white" />
+              </div>
+
+              <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+                <div className="flex items-end justify-between">
+                  <div className="flex-1 mr-4">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="relative h-10 w-10 overflow-hidden rounded-full">
+                        <Image
+                          src={
+                            post.user.profileImage ||
+                            post.user.image ||
+                            "/placeholder.svg?height=40&width=40" ||
+                            "/placeholder.svg" ||
+                            "/placeholder.svg"
+                          }
+                          alt={post.user.username}
+                          fill
+                          className="object-cover"
+                          sizes="40px"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-white font-semibold text-sm">{post.user.nickname || post.user.username}</p>
+                        <p className="text-gray-300 text-xs">{formatDate(post.createdAt)}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-white font-semibold text-sm">{post.user.nickname || post.user.username}</p>
-                      <p className="text-gray-300 text-xs">{formatDate(post.createdAt)}</p>
-                    </div>
+                    {post.content && <p className="text-white text-sm leading-relaxed mb-3 max-w-xs">{post.content}</p>}
                   </div>
-                  {post.content && <p className="text-white text-sm leading-relaxed mb-3 max-w-xs">{post.content}</p>}
-                </div>
 
-                <div className="flex flex-col items-center gap-4">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleLike(post.id)}
-                    className="text-white hover:bg-white/20 rounded-full flex flex-col h-auto py-2"
-                  >
-                    <Heart className={cn("h-6 w-6 mb-1", post.isLiked ? "fill-red-500 text-red-500" : "text-white")} />
-                    <span className="text-xs">{post.likes}</span>
-                  </Button>
+                  <div className="flex flex-col items-center gap-4">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleLike(post.id)}
+                      className="text-white hover:bg-white/20 rounded-full flex flex-col h-auto py-2"
+                    >
+                      <Heart
+                        className={cn("h-6 w-6 mb-1", post.isLiked ? "fill-red-500 text-red-500" : "text-white")}
+                      />
+                      <span className="text-xs">{post.likes}</span>
+                    </Button>
 
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleComment(post.id)}
-                    className="text-white hover:bg-white/20 rounded-full flex flex-col h-auto py-2"
-                  >
-                    <MessageCircle className="h-6 w-6 mb-1" />
-                    <span className="text-xs">{post.comments}</span>
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleComment(post.id)}
+                      className="text-white hover:bg-white/20 rounded-full flex flex-col h-auto py-2"
+                    >
+                      <MessageCircle className="h-6 w-6 mb-1" />
+                      <span className="text-xs">{post.comments}</span>
+                    </Button>
 
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleShare(post.id)}
-                    className="text-white hover:bg-white/20 rounded-full flex flex-col h-auto py-2"
-                  >
-                    <Share2 className="h-6 w-6 mb-1" />
-                    <span className="text-xs">Share</span>
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleShare(post.id)}
+                      className="text-white hover:bg-white/20 rounded-full flex flex-col h-auto py-2"
+                    >
+                      <Share2 className="h-6 w-6 mb-1" />
+                      <span className="text-xs">Share</span>
+                    </Button>
 
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => router.push(`/profile/${post.user.id}`)}
-                    className="text-white hover:bg-white/20 rounded-full"
-                  >
-                    <MoreHorizontal className="h-6 w-6" />
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => router.push(`/profile/${post.user.id}`)}
+                      className="text-white hover:bg-white/20 rounded-full"
+                    >
+                      <MoreHorizontal className="h-6 w-6" />
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
+            </>
           )}
         </div>
       </div>
