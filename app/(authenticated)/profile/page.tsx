@@ -315,8 +315,13 @@ export default function ProfilePage() {
           setEditedAbout(data.user.about || "")
         }
 
-        // Fetch posts and thoughts
-        await Promise.all([fetchPosts(targetUserId), fetchThoughts(targetUserId)])
+        // Fetch posts, thoughts, followers, and following
+        await Promise.all([
+          fetchPosts(targetUserId),
+          fetchThoughts(targetUserId),
+          fetchFollowers(targetUserId),
+          fetchFollowing(targetUserId)
+        ])
 
         // Fetch follow status if not own profile
         if (!isOwnProfile) {
@@ -344,7 +349,7 @@ export default function ProfilePage() {
     if (session) {
       fetchProfile()
     }
-  }, [effectiveUserId, session, isOwnProfile, fetchPosts, fetchThoughts])
+  }, [effectiveUserId, session, isOwnProfile, fetchPosts, fetchThoughts, fetchFollowers, fetchFollowing])
 
   // Media handling for post creation
   const handleMediaTypeSelect = (type: "image" | "video") => {

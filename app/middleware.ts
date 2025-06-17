@@ -44,6 +44,12 @@ export async function middleware(request: NextRequest) {
   if (token && pathname === "/") {
     return NextResponse.redirect(new URL("/feed", request.url))
   }
+
+  // Special handling for profile routes
+  if (token && pathname === "/profile") {
+    // If accessing /profile directly, redirect to /profile/[userId]
+    return NextResponse.redirect(new URL(`/profile/${token.id}`, request.url))
+  }
   
   return NextResponse.next()
 }
