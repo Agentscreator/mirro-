@@ -110,7 +110,8 @@ export default function ProfilePage() {
   const { data: session } = useSession()
   const router = useRouter()
   const userId = params?.userId as string
-  const isOwnProfile = !userId || userId === session?.user?.id
+  const isOwnProfile = !userId
+  const effectiveUserId = isOwnProfile ? session?.user?.id : userId
 
   const [user, setUser] = useState<ProfileUser | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
@@ -302,7 +303,7 @@ export default function ProfilePage() {
     const fetchProfile = async () => {
       try {
         setLoading(true)
-        const targetUserId = userId || session?.user?.id
+        const targetUserId = effectiveUserId
 
         if (!targetUserId) return
 
@@ -343,7 +344,7 @@ export default function ProfilePage() {
     if (session) {
       fetchProfile()
     }
-  }, [userId, session, isOwnProfile, fetchPosts, fetchThoughts])
+  }, [effectiveUserId, session, isOwnProfile, fetchPosts, fetchThoughts])
 
   // Media handling for post creation
   const handleMediaTypeSelect = (type: "image" | "video") => {
@@ -858,7 +859,7 @@ export default function ProfilePage() {
   }
 
   const handleViewFollowers = async () => {
-    const targetUserId = userId || session?.user?.id
+    const targetUserId = effectiveUserId
     if (targetUserId) {
       await fetchFollowers(targetUserId)
       setIsFollowersDialogOpen(true)
@@ -866,7 +867,7 @@ export default function ProfilePage() {
   }
 
   const handleViewFollowing = async () => {
-    const targetUserId = userId || session?.user?.id
+    const targetUserId = effectiveUserId
     if (targetUserId) {
       await fetchFollowing(targetUserId)
       setIsFollowingDialogOpen(true)
