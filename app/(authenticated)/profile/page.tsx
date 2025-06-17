@@ -110,8 +110,16 @@ export default function ProfilePage() {
   const { data: session } = useSession()
   const router = useRouter()
   const userId = params?.userId as string
-  const isOwnProfile = !userId
+  const isOwnProfile = !userId || userId === session?.user?.id
   const effectiveUserId = isOwnProfile ? session?.user?.id : userId
+
+  useEffect(() => {
+    // Redirect to /profile/[userId] if on /profile
+    if (!userId && session?.user?.id) {
+      router.replace(`/profile/${session.user.id}`)
+      return
+    }
+  }, [userId, session, router])
 
   const [user, setUser] = useState<ProfileUser | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
