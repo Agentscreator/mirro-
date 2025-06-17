@@ -1,4 +1,5 @@
 import { pgTable, pgEnum, varchar, integer, uuid, date, text, timestamp, real } from "drizzle-orm/pg-core"
+import { eq, and, gt } from "drizzle-orm"
 
 /* ENUMS */
 export const tagCategoryEnum = pgEnum("tag_category", ["interest", "context", "intention"])
@@ -27,6 +28,8 @@ export const usersTable = pgTable("users", {
   created_at: timestamp("created_at").defaultNow(),
   updated_at: timestamp("updated_at").defaultNow(),
   image: varchar("image", { length: 500 }),
+  resetToken: varchar("reset_token", { length: 255 }),
+  resetTokenExpiry: timestamp("reset_token_expiry"),
 })
 
 // Tags
@@ -132,3 +135,5 @@ export const profileVisitorsTable = pgTable("profile_visitors", {
     .references(() => usersTable.id),
   visitedAt: timestamp("visited_at").defaultNow().notNull(),
 })
+
+export { eq, and, gt }
