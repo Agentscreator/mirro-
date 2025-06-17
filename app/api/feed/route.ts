@@ -61,8 +61,6 @@ export async function GET(request: NextRequest) {
       .leftJoin(usersTable, eq(postsTable.userId, usersTable.id))
       .where(
         and(
-          // Only posts with media (images or videos) for feed
-          sql`(${postsTable.image} IS NOT NULL OR ${postsTable.video} IS NOT NULL)`,
           // Exclude already seen posts
           excludeIds.length > 0 ? notInArray(postsTable.id, excludeIds) : undefined,
           // Cursor-based pagination

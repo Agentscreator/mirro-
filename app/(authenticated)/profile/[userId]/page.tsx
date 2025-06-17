@@ -174,20 +174,7 @@ export default function ProfilePage() {
         console.log("Target user ID:", targetUserId)
         console.log("Force refresh:", forceRefresh)
 
-        if (!forceRefresh) {
-          const cachedPosts = sessionStorage.getItem(cacheKey)
-          if (cachedPosts) {
-            const parsed = JSON.parse(cachedPosts)
-            const cacheAge = Date.now() - parsed.timestamp
-            if (cacheAge < 5 * 60 * 1000) {
-              setPosts(parsed.data)
-              console.log("✅ Posts loaded from cache:", parsed.data.length)
-              setPostsLoading(false)
-              return
-            }
-          }
-        }
-
+        // Always fetch fresh data for own profile
         const apiUrl = `/api/posts?userId=${targetUserId}&t=${Date.now()}`
         const postsResponse = await fetch(apiUrl)
 
@@ -195,12 +182,6 @@ export default function ProfilePage() {
           const postsData = await postsResponse.json()
           const newPosts = postsData.posts || []
           setPosts(newPosts)
-
-          const cacheData = {
-            data: newPosts,
-            timestamp: Date.now(),
-          }
-          sessionStorage.setItem(cacheKey, JSON.stringify(cacheData))
           console.log("✅ Successfully fetched posts:", newPosts.length)
         } else {
           throw new Error("Failed to fetch posts")
@@ -216,7 +197,7 @@ export default function ProfilePage() {
         setPostsLoading(false)
       }
     },
-    [cacheKey],
+    [],
   )
 
   const fetchThoughts = useCallback(async (targetUserId: string) => {
