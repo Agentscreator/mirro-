@@ -16,7 +16,8 @@ export async function middleware(request: NextRequest) {
   // Check if the path is an auth route
   const isAuthRoute = 
     pathname.startsWith("/auth/login") || 
-    pathname.startsWith("/auth/signup")
+    pathname.startsWith("/auth/signup") ||
+    pathname.startsWith("/auth/reset-password")
     
   // Get the session token
   const token = await getToken({ 
@@ -56,6 +57,7 @@ export const config = {
     "/messages/:path*",
     // Auth routes
     "/auth/login",
-    "/auth/signup"
+    "/auth/signup",
+    "/auth/reset-password"
   ],
 }
