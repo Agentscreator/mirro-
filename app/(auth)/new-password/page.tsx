@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Lock, CheckCircle } from "lucide-react"
@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Logo } from "@/components/logo"
 
-export default function NewPasswordPage() {
+function NewPasswordForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const token = searchParams.get("token")
@@ -61,7 +61,7 @@ export default function NewPasswordPage() {
         setSuccess(true)
         // Redirect to login after 3 seconds
         setTimeout(() => {
-          router.push("/auth/login")
+          router.push("/login")
         }, 3000)
       } else {
         const data = await response.json()
@@ -155,7 +155,7 @@ export default function NewPasswordPage() {
         </CardContent>
         <CardFooter className="flex justify-center">
           <Link
-            href="/auth/login"
+            href="/login"
             className="flex items-center gap-2 text-sm premium-link"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -164,5 +164,29 @@ export default function NewPasswordPage() {
         </CardFooter>
       </Card>
     </div>
+  )
+}
+
+// Loading component for Suspense fallback
+function LoadingState() {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center p-4 silver-pattern">
+      <Card className="w-full max-w-md premium-card">
+        <CardHeader className="space-y-1">
+          <div className="flex justify-center mb-4">
+            <Lock className="h-16 w-16 text-blue-500" />
+          </div>
+          <CardTitle className="text-2xl font-bold text-center blue-text">Loading...</CardTitle>
+        </CardHeader>
+      </Card>
+    </div>
+  )
+}
+
+export default function NewPasswordPage() {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <NewPasswordForm />
+    </Suspense>
   )
 } 
